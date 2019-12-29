@@ -209,7 +209,6 @@ where
   transport.send(&request)?;
   let reply = transport.receive()?;
 
-  // TODO: use packet timestamping when available
   let destination_timestamp = Utc::now();
 
   check_reply_validity(&request, &reply)?;
