@@ -1,0 +1,14 @@
+[package]
+name = "rsntp"
+version = "0.1.0"
+authors = ["Szilveszter Dobák <dobaksz@gmail.com>"]
+repository = "https://github.com/dobaksz/rsntp"
+edition = "2018"
+keywords = ["sntp", "time"] 
+categories = ["network-programming"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "An RFC 4330 compliant Simple Network Time Protocol (SNTP) client library for Rust"
+
+[dependencies]
+chrono = "0.4"
