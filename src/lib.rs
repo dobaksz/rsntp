@@ -32,15 +32,14 @@
 mod core_logic;
 mod error;
 mod packet;
-mod transport;
 
-pub use core_logic::SynchronizationResult;
+pub use core_logic::{Reply, Request, SynchronizationResult};
 pub use error::{KissCode, ProtocolError, SynchroniztationError};
-pub use packet::{LeapIndicator, ReferenceIdentifier};
+pub use packet::{LeapIndicator, Packet, ReferenceIdentifier};
 
 use std::io::ErrorKind;
-use std::net::{SocketAddr, ToSocketAddrs};
-use transport::UdpTransport;
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+use std::time::Duration;
 
 /// SNTP client instance
 ///
@@ -106,7 +105,19 @@ impl SntpClient {
   /// let result = client.synchronize();
   /// ```
   pub fn synchronize(&self) -> Result<SynchronizationResult, SynchroniztationError> {
-    let mut transport = UdpTransport::connect(self.server_address)?;
-    core_logic::synchronize(&mut transport)
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+
+    socket.set_read_timeout(Some(Duration::from_secs(3)))?;
+    socket.connect(self.server_address)?;
+
+    let request = Request::new();
+    let mut receive_buffer = [0; Packet::ENCODED_LEN];
+
+    socket.send(&request.as_bytes())?;
+    socket.recv(&mut receive_buffer)?;
+
+    let reply = Reply::new(request, Packet::from_bytes(&receive_buffer)?);
+
+    reply.process()
   }
 }

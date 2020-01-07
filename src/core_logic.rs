@@ -1,6 +1,5 @@
 use crate::error::{KissCode, ProtocolError, SynchroniztationError};
 use crate::packet::{LeapIndicator, Mode, Packet, ReferenceIdentifier, SntpTimestamp};
-use crate::transport::Transport;
 use chrono::{DateTime, Duration, Utc};
 
 /// Results of a synchronization.
@@ -149,70 +148,87 @@ impl SynchronizationResult {
   }
 }
 
-fn check_reply_validity(request: &Packet, reply: &Packet) -> Result<(), ProtocolError> {
-  if reply.stratum == 0 {
-    return Err(ProtocolError::KissODeath(KissCode::new(
-      &reply.reference_identifier,
-    )));
-  }
-
-  if reply.originate_timestamp != request.transmit_timestamp {
-    return Err(ProtocolError::InvalidOriginateTimestamp);
-  }
-
-  if reply.transmit_timestamp.is_zero() {
-    return Err(ProtocolError::InvalidTransmitTimestamp);
-  }
-
-  if reply.mode != Mode::Server && reply.mode != Mode::Broadcast {
-    return Err(ProtocolError::InvalidMode);
-  }
-
-  Ok(())
+pub struct Request {
+  packet: Packet,
 }
 
-fn calculate_timeinfo(
-  reply: &Packet,
-  destination_timestamp: DateTime<Utc>,
-) -> Result<SynchronizationResult, SynchroniztationError> {
-  let originate_ts = reply.originate_timestamp.to_datetime();
-  let transmit_ts = reply.transmit_timestamp.to_datetime();
-  let receive_ts = reply.receive_timestamp.to_datetime();
+impl Request {
+  pub fn new() -> Request {
+    Request {
+      packet: Packet {
+        li: LeapIndicator::NoWarning,
+        mode: Mode::Client,
+        stratum: 0,
+        reference_identifier: ReferenceIdentifier::Empty,
+        reference_timestamp: SntpTimestamp::zero(),
+        originate_timestamp: SntpTimestamp::zero(),
+        receive_timestamp: SntpTimestamp::zero(),
+        transmit_timestamp: SntpTimestamp::from_datetime(Utc::now()),
+      },
+    }
+  }
 
-  let round_trip_delay = (destination_timestamp - originate_ts) - (transmit_ts - receive_ts);
-  let clock_offset = ((receive_ts - originate_ts) + (transmit_ts - destination_timestamp)) / 2;
+  pub fn as_bytes(&self) -> [u8; Packet::ENCODED_LEN] {
+    self.packet.to_bytes()
+  }
 
-  Ok(SynchronizationResult {
-    round_trip_delay,
-    clock_offset,
-    reference_identifier: reply.reference_identifier.clone(),
-    leap_indicator: reply.li,
-    stratum: reply.stratum,
-  })
+  fn into_packet(self) -> Packet {
+    self.packet
+  }
 }
 
-pub fn synchronize<T>(transport: &mut T) -> Result<SynchronizationResult, SynchroniztationError>
-where
-  T: Transport,
-{
-  let request = Packet {
-    li: LeapIndicator::NoWarning,
-    mode: Mode::Client,
-    stratum: 0,
-    reference_identifier: ReferenceIdentifier::Empty,
-    reference_timestamp: SntpTimestamp::zero(),
-    originate_timestamp: SntpTimestamp::zero(),
-    receive_timestamp: SntpTimestamp::zero(),
-    transmit_timestamp: SntpTimestamp::from_datetime(Utc::now()),
-  };
+pub struct Reply {
+  request: Packet,
+  reply: Packet,
+  reply_timestamp: DateTime<Utc>,
+}
 
-  transport.send(&request)?;
-  let reply = transport.receive()?;
+impl Reply {
+  pub fn new(request: Request, reply: Packet) -> Reply {
+    Reply {
+      request: request.into_packet(),
+      reply,
+      reply_timestamp: Utc::now(),
+    }
+  }
 
-  let destination_timestamp = Utc::now();
+  fn check(&self) -> Result<(), ProtocolError> {
+    if self.reply.stratum == 0 {
+      return Err(ProtocolError::KissODeath(KissCode::new(
+        &self.reply.reference_identifier,
+      )));
+    }
 
-  check_reply_validity(&request, &reply)?;
-  calculate_timeinfo(&reply, destination_timestamp)
+    if self.reply.originate_timestamp != self.request.transmit_timestamp {
+      return Err(ProtocolError::InvalidOriginateTimestamp);
+    }
+
+    if self.reply.transmit_timestamp.is_zero() {
+      return Err(ProtocolError::InvalidTransmitTimestamp);
+    }
+
+    if self.reply.mode != Mode::Server && self.reply.mode != Mode::Broadcast {
+      return Err(ProtocolError::InvalidMode);
+    }
+    Ok(())
+  }
+
+  pub fn process(self) -> Result<SynchronizationResult, SynchroniztationError> {
+    self.check()?;
+
+    let originate_ts = self.reply.originate_timestamp.to_datetime();
+    let transmit_ts = self.reply.transmit_timestamp.to_datetime();
+    let receive_ts = self.reply.receive_timestamp.to_datetime();
+    let round_trip_delay = (self.reply_timestamp - originate_ts) - (transmit_ts - receive_ts);
+    let clock_offset = ((receive_ts - originate_ts) + (transmit_ts - self.reply_timestamp)) / 2;
+    Ok(SynchronizationResult {
+      round_trip_delay,
+      clock_offset,
+      reference_identifier: self.reply.reference_identifier.clone(),
+      leap_indicator: self.reply.li,
+      stratum: self.reply.stratum,
+    })
+  }
 }
 
 #[cfg(test)]
@@ -230,61 +246,28 @@ mod tests {
     };
   }
 
-  struct ServerMock<F>
-  where
-    F: Fn(&Packet) -> Result<Result<Packet, SynchroniztationError>, SynchroniztationError>,
-  {
-    handler: F,
-    answer: Option<Result<Packet, SynchroniztationError>>,
-  }
-
-  impl<F> ServerMock<F>
-  where
-    F: Fn(&Packet) -> Result<Result<Packet, SynchroniztationError>, SynchroniztationError>,
-  {
-    fn new(handler: F) -> ServerMock<F> {
-      ServerMock {
-        handler,
-        answer: None,
-      }
-    }
-  }
-
-  impl<F> Transport for ServerMock<F>
-  where
-    F: Fn(&Packet) -> Result<Result<Packet, SynchroniztationError>, SynchroniztationError>,
-  {
-    fn send(&mut self, packet: &Packet) -> Result<(), SynchroniztationError> {
-      self.answer = Some((self.handler)(packet)?);
-
-      Ok(())
-    }
-
-    fn receive(&mut self) -> Result<Packet, SynchroniztationError> {
-      self.answer.take().unwrap()
-    }
-  }
-
   #[test]
   fn basic_synchronization_works() {
-    let mut server_mock = ServerMock::new(|packet: &Packet| {
-      std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
-      let now = Utc::now();
-      std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
+    let request = Request::new();
 
-      Ok(Ok(Packet {
-        li: LeapIndicator::NoWarning,
-        mode: Mode::Server,
-        stratum: 1,
-        reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-        reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
-        originate_timestamp: packet.transmit_timestamp,
-        receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-        transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-      }))
-    });
+    std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
+    let now = Utc::now();
+    std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
 
-    let result = synchronize(&mut server_mock).unwrap();
+    let reply_packet = Packet {
+      li: LeapIndicator::NoWarning,
+      mode: Mode::Server,
+      stratum: 1,
+      reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
+      reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+      originate_timestamp: request.packet.transmit_timestamp,
+      receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+      transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+    };
+
+    let reply = Reply::new(request, reply_packet);
+
+    let result = reply.process().unwrap();
 
     assert_between!(result.clock_offset().num_milliseconds(), -510, -490);
     assert_between!(result.round_trip_delay().num_milliseconds(), 190, 210);
@@ -295,113 +278,93 @@ mod tests {
   }
 
   #[test]
-  fn synch_fails_in_case_of_send_error() {
-    let mut server_mock = ServerMock::new(|_: &Packet| {
-      Err(SynchroniztationError::IOError(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "Test error",
-      )))
-    });
-
-    let sync_err = synchronize(&mut server_mock);
-
-    assert!(sync_err.is_err());
-  }
-  #[test]
-  fn sync_fails_in_case_of_receive_error() {
-    let mut server_mock = ServerMock::new(|_: &Packet| {
-      Ok(Err(SynchroniztationError::IOError(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "Test error",
-      ))))
-    });
-
-    let sync_err = synchronize(&mut server_mock);
-
-    assert!(sync_err.is_err());
-  }
-
-  #[test]
   fn sync_fails_if_reply_originate_ts_does_not_match_request_transmit_ts() {
-    let mut server_mock = ServerMock::new(|_| {
-      let now = Utc::now();
+    let request = Request::new();
+    let now = Utc::now();
 
-      Ok(Ok(Packet {
-        li: LeapIndicator::NoWarning,
-        mode: Mode::Server,
-        stratum: 1,
-        reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-        reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
-        originate_timestamp: SntpTimestamp::from_datetime(now),
-        receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-        transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-      }))
-    });
+    let reply_packet = Packet {
+      li: LeapIndicator::NoWarning,
+      mode: Mode::Server,
+      stratum: 1,
+      reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
+      reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+      originate_timestamp: SntpTimestamp::from_datetime(now),
+      receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+      transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+    };
 
-    let result = synchronize(&mut server_mock);
+    let reply = Reply::new(request, reply_packet);
+
+    let result = reply.process();
+
     assert!(result.is_err());
   }
 
   #[test]
   fn sync_fails_if_reply_contains_zero_transmit_timestamp() {
-    let mut server_mock = ServerMock::new(|packet: &Packet| {
-      let now = Utc::now();
+    let request = Request::new();
+    let now = Utc::now();
 
-      Ok(Ok(Packet {
-        li: LeapIndicator::NoWarning,
-        mode: Mode::Server,
-        stratum: 1,
-        reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-        reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
-        originate_timestamp: packet.transmit_timestamp,
-        receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-        transmit_timestamp: SntpTimestamp::zero(),
-      }))
-    });
+    let reply_packet = Packet {
+      li: LeapIndicator::NoWarning,
+      mode: Mode::Server,
+      stratum: 1,
+      reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
+      reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+      originate_timestamp: request.packet.transmit_timestamp,
+      receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+      transmit_timestamp: SntpTimestamp::zero(),
+    };
 
-    let result = synchronize(&mut server_mock);
+    let reply = Reply::new(request, reply_packet);
+
+    let result = reply.process();
+
     assert!(result.is_err());
   }
 
   #[test]
   fn sync_fails_if_reply_contains_wrong_mode() {
-    let mut server_mock = ServerMock::new(|packet: &Packet| {
-      let now = Utc::now();
+    let request = Request::new();
+    let now = Utc::now();
 
-      Ok(Ok(Packet {
-        li: LeapIndicator::NoWarning,
-        mode: Mode::Client,
-        stratum: 1,
-        reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-        reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
-        originate_timestamp: packet.transmit_timestamp,
-        receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-        transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-      }))
-    });
+    let reply_packet = Packet {
+      li: LeapIndicator::NoWarning,
+      mode: Mode::Client,
+      stratum: 1,
+      reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
+      reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+      originate_timestamp: request.packet.transmit_timestamp,
+      receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+      transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+    };
 
-    let result = synchronize(&mut server_mock);
+    let reply = Reply::new(request, reply_packet);
+
+    let result = reply.process();
+
     assert!(result.is_err());
   }
 
   #[test]
   fn sync_fails_if_kiss_o_death_received() {
-    let mut server_mock = ServerMock::new(|packet: &Packet| {
-      let now = Utc::now();
+    let request = Request::new();
+    let now = Utc::now();
 
-      Ok(Ok(Packet {
-        li: LeapIndicator::NoWarning,
-        mode: Mode::Server,
-        stratum: 0,
-        reference_identifier: ReferenceIdentifier::new_ascii([0x52, 0x41, 0x54, 0x45]).unwrap(),
-        reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
-        originate_timestamp: packet.transmit_timestamp,
-        receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-        transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-      }))
-    });
+    let reply_packet = Packet {
+      li: LeapIndicator::NoWarning,
+      mode: Mode::Server,
+      stratum: 0,
+      reference_identifier: ReferenceIdentifier::new_ascii([0x52, 0x41, 0x54, 0x45]).unwrap(),
+      reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+      originate_timestamp: request.packet.transmit_timestamp,
+      receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+      transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+    };
 
-    let err = synchronize(&mut server_mock).unwrap_err();
+    let reply = Reply::new(request, reply_packet);
+
+    let err = reply.process().unwrap_err();
 
     if let SynchroniztationError::ProtocolError(ProtocolError::KissODeath(KissCode::RateExceeded)) =
       err

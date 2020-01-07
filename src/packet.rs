@@ -191,7 +191,7 @@ pub struct Packet {
 impl Packet {
   pub const ENCODED_LEN: usize = 48;
 
-  pub fn decode(data: &[u8]) -> Result<Packet, ProtocolError> {
+  pub fn from_bytes(data: &[u8]) -> Result<Packet, ProtocolError> {
     if data.len() < Packet::ENCODED_LEN {
       return Err(ProtocolError::PacketIsTooShort);
     }
@@ -226,7 +226,7 @@ impl Packet {
     })
   }
 
-  pub fn encode(&self) -> [u8; Packet::ENCODED_LEN] {
+  pub fn to_bytes(&self) -> [u8; Packet::ENCODED_LEN] {
     const SNTP_VERSION_CONSTANT: u8 = 0x20;
     let mut binary = [0; Packet::ENCODED_LEN];
 
@@ -321,7 +321,7 @@ mod tests {
       0xdc, 0xb5, 0x78,
     ];
 
-    let packet = Packet::decode(&raw).unwrap();
+    let packet = Packet::from_bytes(&raw).unwrap();
 
     assert_eq!(packet.li, LeapIndicator::NoWarning);
     assert_eq!(packet.mode, Mode::Client);
@@ -359,7 +359,7 @@ mod tests {
     ];
 
     assert_eq!(
-      Packet::decode(&raw).unwrap_err(),
+      Packet::from_bytes(&raw).unwrap_err(),
       ProtocolError::InvalidPacketVersion
     );
   }
@@ -372,7 +372,7 @@ mod tests {
     ];
 
     assert_eq!(
-      Packet::decode(&raw).unwrap_err(),
+      Packet::from_bytes(&raw).unwrap_err(),
       ProtocolError::PacketIsTooShort
     );
   }
@@ -387,7 +387,7 @@ mod tests {
     ];
 
     assert_eq!(
-      Packet::decode(&raw).unwrap_err(),
+      Packet::from_bytes(&raw).unwrap_err(),
       ProtocolError::InvalidMode
     );
   }
@@ -414,7 +414,7 @@ mod tests {
     };
 
     assert_eq!(
-      packet.encode().to_vec(),
+      packet.to_bytes().to_vec(),
       vec![
         0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0xc5, 0x02, 0x02, 0xac, 0x41, 0x6e, 0x15, 0x87, 0xc5, 0x02, 0x04, 0xec, 0xee, 0xd3,
@@ -445,7 +445,7 @@ mod tests {
       ]),
     };
 
-    let _ = packet.encode();
+    let _ = packet.to_bytes();
   }
 
   #[test]
@@ -457,7 +457,7 @@ mod tests {
       0xdc, 0xb5, 0x78,
     ];
 
-    let packet = Packet::decode(&raw).unwrap();
+    let packet = Packet::from_bytes(&raw).unwrap();
 
     assert_eq!(
       packet.reference_identifier,
