@@ -37,7 +37,7 @@ impl SynchronizationResult {
     self.clock_offset
   }
 
-  /// Return with the round trip delay
+  /// Returns with the round trip delay
   ///
   /// The time is needed for SNTP packets to travel back and forth between the host and the server.
   /// It is a signed value but negative values should not be possible in client mode
@@ -60,7 +60,7 @@ impl SynchronizationResult {
 
   /// Returns with the server reference identifier.
   ///
-  /// This identifies the particular reference source. For primary server (startum = 1) this is a four
+  /// This identifies the synchronizaion source of the server. For primary servers (startum = 1) this is a four
   /// byte ASCII string, for secondary IPv4 servers (startum >= 2) this is an IP address.
   ///   
   /// # Example
@@ -80,7 +80,7 @@ impl SynchronizationResult {
 
   /// Returns with the current UTC date and time, based on the synchronized SNTP timestamp.
   ///
-  /// This is the current UTC date and time, calulcated by adding clock offset the UTC time. To be accurate,
+  /// This is the current UTC date and time, calculated by adding clock offset the UTC time. To be accurate,
   /// use the returned value immediately after the call of this function.
   ///
   /// # Example
@@ -126,7 +126,11 @@ impl SynchronizationResult {
 
   /// Returns with the server stratum
   ///
-  /// This is the number indicating the startum of the server clock with values defined as:
+  /// NTP uses a hierarchical, semi-layered system of time sources. Each level of this hierarchy is
+  /// termed a stratum and is assigned a number starting with zero for the reference clock at the top.
+  /// A server synchronized to a stratum n server runs at stratum n + 1
+  ///
+  /// Values defined as:
   /// *  1 - Primary reference (e.g., calibrated atomic clock, radio clock, etc...)
   /// *  2..15 - Secondary reference (via NTP, calculated as the stratum of system peer plus one)
   /// *  16 - Unsynchronized
