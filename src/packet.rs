@@ -149,7 +149,9 @@ impl ReferenceIdentifier {
     }
 
     Ok(ReferenceIdentifier::ASCII(
-      String::from_utf8_lossy(&raw).into(),
+      String::from_utf8_lossy(&raw)
+        .trim_end_matches('\u{0}')
+        .into(),
     ))
   }
 
@@ -462,6 +464,23 @@ mod tests {
     assert_eq!(
       packet.reference_identifier,
       ReferenceIdentifier::ASCII("LOCL".into())
+    );
+  }
+
+  #[test]
+  fn decoding_short_ascii_reference_identifier_works() {
+    let raw = [
+      0x23, 0x01, 0x0a, 0xec, 0x00, 0x00, 0x02, 0x86, 0x00, 0x00, 0x0b, 0x33, 0x47, 0x50, 0x53,
+      0x00, 0xc5, 0x02, 0x02, 0xac, 0x41, 0x6e, 0x15, 0x87, 0xc5, 0x02, 0x04, 0xec, 0xee, 0xd3,
+      0x3c, 0x52, 0xc5, 0x02, 0x04, 0xeb, 0xd9, 0xd8, 0xd7, 0x9d, 0xc5, 0x02, 0x04, 0xeb, 0xd9,
+      0xdc, 0xb5, 0x78,
+    ];
+
+    let packet = Packet::from_bytes(&raw).unwrap();
+
+    assert_eq!(
+      packet.reference_identifier,
+      ReferenceIdentifier::ASCII("GPS".into())
     );
   }
 }
