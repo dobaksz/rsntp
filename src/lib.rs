@@ -79,6 +79,7 @@ const SNTP_PORT: u16 = 123;
 #[derive(Clone, Debug, Hash)]
 pub struct SntpClient {
   server_address: SocketAddr,
+  timeout: Duration,
 }
 
 impl SntpClient {
@@ -114,15 +115,18 @@ impl SntpClient {
       )
     })?;
 
-    Ok(SntpClient { server_address })
+    Ok(SntpClient {
+      server_address,
+      timeout: Duration::from_secs(3),
+    })
   }
 
   /// Synchronize with the server
   ///
   /// It sends a request to the server, waits for the reply and processes that reply. This is a blocking
-  /// call and can block for quite long time (seconds). Default timeout is 3 seconds, if no reply is received in
-  /// that timeframe then an error is returned. It tries to send the request just once, no retry in case of
-  /// error.
+  /// call and can block for quite long time. After sending the request it waits for a timeout and if no
+  /// reply is received then an error is returned.
+  ///
   ///
   /// # Example
   ///
@@ -136,7 +140,7 @@ impl SntpClient {
   pub fn synchronize(&self) -> Result<SynchronizationResult, SynchroniztationError> {
     let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
 
-    socket.set_read_timeout(Some(Duration::from_secs(3)))?;
+    socket.set_read_timeout(Some(self.timeout))?;
     socket.connect(self.server_address)?;
 
     let request = Request::new();
@@ -149,6 +153,24 @@ impl SntpClient {
 
     reply.process()
   }
+
+  /// Sets synchronization timeout
+  ///
+  /// This sets the amount of time which the client waits for reply after the request has been sent.
+  /// Default is 3 seconds.
+  ///
+  /// # Example
+  ///
+  /// ```no_run
+  /// use rsntp::SntpClient;
+  /// use std::time::Duration;
+  ///
+  /// let mut client = SntpClient::new("pool.ntp.org").unwrap();
+  /// client.set_timeout(Duration::from_secs(10));
+  /// ```
+  pub fn set_timeout(&mut self, timeout: Duration) {
+    self.timeout = timeout;
+  }
 }
 
 /// Asynchronous API client instance
@@ -160,6 +182,7 @@ impl SntpClient {
 #[cfg(feature = "async")]
 pub struct AsyncSntpClient {
   server_address: String,
+  timeout: Duration,
 }
 
 #[cfg(feature = "async")]
@@ -180,6 +203,7 @@ impl AsyncSntpClient {
   pub fn new(server_address: &str) -> AsyncSntpClient {
     AsyncSntpClient {
       server_address: server_address.into(),
+      timeout: Duration::from_secs(3),
     }
   }
 
@@ -187,9 +211,8 @@ impl AsyncSntpClient {
   ///
   /// Only available when async feature is enabled (which is the default)
   ///
-  /// It sends a request to the server and processes the reply. Default timeout is 3 seconds, if no reply is
-  /// received in that timeframe then an error is returned. It tries to send the request just once, no retry
-  /// in case of an error.
+  /// It sends a request to the server and processes the reply. If no reply is received within timeout
+  /// then an error is returned.
   ///
   /// # Example
   ///
@@ -213,7 +236,7 @@ impl AsyncSntpClient {
 
     socket.send(&request.as_bytes()).await?;
 
-    let receive_result = timeout(Duration::from_secs(3), socket.recv(&mut receive_buffer)).await;
+    let receive_result = timeout(self.timeout, socket.recv(&mut receive_buffer)).await;
 
     if receive_result.is_err() {
       return Err(
@@ -228,5 +251,23 @@ impl AsyncSntpClient {
     let reply = Reply::new(request, Packet::from_bytes(&receive_buffer)?);
 
     reply.process()
+  }
+
+  /// Sets synchronization timeout
+  ///
+  /// This sets the amount of time which the client waits for reply after the request has been sent.
+  /// Default is 3 seconds.
+  ///
+  /// # Example
+  ///
+  /// ```no_run
+  /// use rsntp::AsyncSntpClient;
+  /// use std::time::Duration;
+  ///
+  /// let mut client = AsyncSntpClient::new("pool.ntp.org");
+  /// client.set_timeout(Duration::from_secs(10));
+  /// ```
+  pub fn set_timeout(&mut self, timeout: Duration) {
+    self.timeout = timeout;
   }
 }
