@@ -29,7 +29,7 @@ let local_time: DateTime<Local> = DateTime::from(result.datetime());
 println!("Current time is: {}", local_time);
 ```
 
-And the same with the asynchronous API:
+And a function which uses the asynchronous API to obtain local time:
 
 ```rust
 use rsntp::AsyncSntpClient;

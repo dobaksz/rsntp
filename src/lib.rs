@@ -30,7 +30,7 @@
 //! println!("Current time is: {}", local_time);
 //! ```
 //!
-//! And the same with the asynchronous API:
+//! And a function which uses the asynchronous API to obtain local time:
 //!
 //! ```no_run
 //! use rsntp::AsyncSntpClient;
