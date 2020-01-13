@@ -13,7 +13,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! rsntp = "0.2"
+//! rsntp = "0.3.1"
 //! ```
 //!
 //! Obtain the current local time with the blocking API:
@@ -51,7 +51,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! rsntp = { version = "0.2", default-features = false }
+//! rsntp = { version = "0.3.1", default-features = false }
 //! ```
 mod core_logic;
 mod error;
