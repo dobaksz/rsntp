@@ -16,5 +16,5 @@ default = ["async"]
 async = ["tokio"]
 
 [dependencies]
-chrono = "0.4"
-tokio = { version = "0.2", features = ["udp", "dns", "time"], optional = true }
+chrono = "^0.4.10"
+tokio = { version = "^0.2.9", features = ["udp", "dns", "time"], optional = true }
