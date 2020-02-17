@@ -29,10 +29,10 @@ impl SntpTimestamp {
   }
 
   pub fn from_datetime<T: TimeZone>(datetime: DateTime<T>) -> SntpTimestamp {
-    let seconds = datetime.timestamp() as u128 + SntpTimestamp::UNIX_EPOCH;
+    let seconds = datetime.timestamp() as i128 + SntpTimestamp::UNIX_EPOCH as i128;
     let subsec_nanos = ((datetime.timestamp_subsec_nanos() as u128) << 32) / 1_000_000_000;
 
-    SntpTimestamp((seconds << 32) + subsec_nanos)
+    SntpTimestamp(((seconds as u128) << 32) + subsec_nanos)
   }
 
   fn to_bytes(&self) -> [u8; 8] {
@@ -48,9 +48,7 @@ impl SntpTimestamp {
   }
 
   pub fn to_datetime(&self) -> DateTime<Utc> {
-    let secs: i64 = ((self.0 >> 32) - SntpTimestamp::UNIX_EPOCH)
-      .try_into()
-      .unwrap();
+    let secs = (self.0 >> 32) as i64 - (SntpTimestamp::UNIX_EPOCH as i64);
     let nsecs: u32 = (((self.0 & 0xffff_ffff) * 1_000_000_000) >> 32)
       .try_into()
       .unwrap();
@@ -280,10 +278,17 @@ mod tests {
 
   #[test]
   fn timestamp_to_datetime_works_correctly() {
+    let before_1970 =
+      SntpTimestamp::from_bytes([0x82, 0x89, 0x9d, 0xf6, 0x14, 0xf2, 0x58, 0x1a]).to_datetime();
     let before_2036 =
       SntpTimestamp::from_bytes([0xc5, 0x02, 0x03, 0x4c, 0x36, 0xbb, 0xa9, 0x8e]).to_datetime();
     let after_2036 =
       SntpTimestamp::from_bytes([0x08, 0x1D, 0xD1, 0x80, 0x80, 0x00, 0x00, 0x00]).to_datetime();
+
+    assert_eq!(
+      before_1970,
+      Utc.ymd(1969, 5, 26).and_hms_nano(21, 9, 10, 81_822_878)
+    );
 
     assert_eq!(
       before_2036,
@@ -298,10 +303,17 @@ mod tests {
 
   #[test]
   fn timestamp_from_datetime_works_correctly() {
+    let before_1970 =
+      SntpTimestamp::from_datetime(Utc.ymd(1969, 5, 26).and_hms_nano(21, 9, 10, 81_822_878));
     let before_2036 =
       SntpTimestamp::from_datetime(Utc.ymd(2004, 9, 27).and_hms_nano(3, 11, 8, 213_800_999));
     let after_2036 =
       SntpTimestamp::from_datetime(Utc.ymd(2040, 6, 1).and_hms_nano(8, 0, 0, 500_000_000));
+
+    assert_eq!(
+      before_1970.to_bytes(),
+      [0x82, 0x89, 0x9d, 0xf6, 0x14, 0xf2, 0x58, 0x19]
+    );
 
     assert_eq!(
       before_2036.to_bytes(),
