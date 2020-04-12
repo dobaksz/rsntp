@@ -1,4 +1,4 @@
-[![](https://img.shields.io/crates/v/rsnto)](https://crates.io/crates/rsntp)
+[![](https://img.shields.io/crates/v/rsntp)](https://crates.io/crates/rsntp)
 [![Build Status](https://travis-ci.com/dobaksz/rsntp.svg?branch=master)](https://travis-ci.com/dobaksz/rsntp)
 
 # rsntp
