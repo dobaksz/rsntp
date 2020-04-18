@@ -64,7 +64,7 @@ pub use packet::{LeapIndicator, ReferenceIdentifier};
 use core_logic::{Reply, Request};
 use packet::Packet;
 use std::io::ErrorKind;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
 #[cfg(feature = "async")]
@@ -78,6 +78,7 @@ const SNTP_PORT: u16 = 123;
 /// remote server and can be reused, i.e. multiple synchronization can be executed with a single instance.
 #[derive(Clone, Debug, Hash)]
 pub struct SntpClient {
+  bind_address: SocketAddr,
   server_address: SocketAddr,
   timeout: Duration,
 }
@@ -116,6 +117,7 @@ impl SntpClient {
     })?;
 
     Ok(SntpClient {
+      bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
       server_address,
       timeout: Duration::from_secs(3),
     })
@@ -138,7 +140,7 @@ impl SntpClient {
   /// let result = client.synchronize();
   /// ```
   pub fn synchronize(&self) -> Result<SynchronizationResult, SynchroniztationError> {
-    let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
+    let socket = std::net::UdpSocket::bind(self.bind_address)?;
 
     socket.set_read_timeout(Some(self.timeout))?;
     socket.connect(self.server_address)?;
@@ -171,6 +173,24 @@ impl SntpClient {
   pub fn set_timeout(&mut self, timeout: Duration) {
     self.timeout = timeout;
   }
+
+  /// Set bind address of the client
+  ///
+  /// This is the local address which is used to send/receive UDP packets. It can
+  /// be used to bind the client to a specific IP address or port. By default it is
+  /// "0.0.0.0:0" which means that both IP address and port are chosen automatically.
+  ///
+  /// # Example
+  ///
+  /// ```no_run
+  /// use rsntp::SntpClient;
+  ///
+  /// let mut client = SntpClient::new("pool.ntp.org").unwrap();
+  /// client.set_bind_address("192.168.0.1:0".parse().unwrap());
+  /// ```
+  pub fn set_bind_address(&mut self, address: SocketAddr) {
+    self.bind_address = address;
+  }
 }
 
 /// Asynchronous API client instance
@@ -181,6 +201,7 @@ impl SntpClient {
 /// remote server and can be reused, i.e. multiple synchronization can be executed with a single instance.
 #[cfg(feature = "async")]
 pub struct AsyncSntpClient {
+  bind_address: SocketAddr,
   server_address: String,
   timeout: Duration,
 }
@@ -202,6 +223,7 @@ impl AsyncSntpClient {
   /// ```
   pub fn new(server_address: &str) -> AsyncSntpClient {
     AsyncSntpClient {
+      bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
       server_address: server_address.into(),
       timeout: Duration::from_secs(3),
     }
@@ -230,7 +252,7 @@ impl AsyncSntpClient {
     let mut receive_buffer = [0; Packet::ENCODED_LEN];
     let socket_address = (self.server_address.as_str(), SNTP_PORT);
 
-    let mut socket = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
+    let mut socket = tokio::net::UdpSocket::bind(self.bind_address).await?;
     socket.connect(socket_address).await?;
     let request = Request::new();
 
@@ -269,5 +291,23 @@ impl AsyncSntpClient {
   /// ```
   pub fn set_timeout(&mut self, timeout: Duration) {
     self.timeout = timeout;
+  }
+
+  /// Set bind address of the client
+  ///
+  /// This is the local address which is used to send/receive UDP packets. It can
+  /// be used to bind the client to a specific IP address or port. By default it is
+  /// "0.0.0.0:0" which means that both IP address and port are chosen automatically.
+  ///
+  /// # Example
+  ///
+  /// ```no_run
+  /// use rsntp::AsyncSntpClient;
+  ///
+  /// let mut client = AsyncSntpClient::new("pool.ntp.org");
+  /// client.set_bind_address("192.168.0.1:0".parse().unwrap());
+  /// ```
+  pub fn set_bind_address(&mut self, address: SocketAddr) {
+    self.bind_address = address;
   }
 }
