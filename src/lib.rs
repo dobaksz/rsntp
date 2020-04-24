@@ -32,6 +32,7 @@
 //!
 //! And a function which uses the asynchronous API to obtain local time:
 //!
+#[cfg_attr(feature = "async", doc = r##"
 //! ```no_run
 //! use rsntp::AsyncSntpClient;
 //! use chrono::{DateTime, Local};
@@ -53,6 +54,8 @@
 //! [dependencies]
 //! rsntp = { version = "0.3.2", default-features = false }
 //! ```
+"##)]
+
 mod core_logic;
 mod error;
 mod packet;
