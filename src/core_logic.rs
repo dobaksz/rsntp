@@ -28,8 +28,8 @@ impl SynchronizationResult {
   /// use rsntp::SntpClient;
   /// use chrono::Local;
   ///
-  /// let client = SntpClient::new("pool.ntp.org").unwrap();
-  /// let result = client.synchronize().unwrap();
+  /// let client = SntpClient::new();
+  /// let result = client.synchronize("pool.ntp.org").unwrap();
   ///
   /// println!("Local time: {}", Local::now() + result.clock_offset());
   /// ```
@@ -49,8 +49,8 @@ impl SynchronizationResult {
   /// use rsntp::SntpClient;
   /// use chrono::Local;
   ///
-  /// let client = SntpClient::new("pool.ntp.org").unwrap();
-  /// let result = client.synchronize().unwrap();
+  /// let client = SntpClient::new();
+  /// let result = client.synchronize("pool.ntp.org").unwrap();
   ///
   /// println!("RTT: {} ms", result.round_trip_delay().num_milliseconds());
   /// ```
@@ -69,8 +69,8 @@ impl SynchronizationResult {
   /// use rsntp::SntpClient;
   /// use chrono::Local;
   ///
-  /// let client = SntpClient::new("pool.ntp.org").unwrap();
-  /// let result = client.synchronize().unwrap();
+  /// let client = SntpClient::new();
+  /// let result = client.synchronize("pool.ntp.org").unwrap();
   ///
   /// println!("Server reference identifier: {}", result.reference_identifier());
   /// ```
@@ -90,8 +90,8 @@ impl SynchronizationResult {
   /// use rsntp::SntpClient;
   /// use chrono::{DateTime, Local};
   ///
-  /// let client = SntpClient::new("pool.ntp.org").unwrap();
-  /// let result = client.synchronize().unwrap();
+  /// let client = SntpClient::new();
+  /// let result = client.synchronize("pool.ntp.org").unwrap();
   ///
   /// let local_time: DateTime<Local> = DateTime::from(result.datetime());
   /// ```
@@ -115,8 +115,8 @@ impl SynchronizationResult {
   /// use rsntp::SntpClient;
   /// use chrono::{DateTime, Local};
   ///
-  /// let client = SntpClient::new("pool.ntp.org").unwrap();
-  /// let result = client.synchronize().unwrap();
+  /// let client = SntpClient::new();
+  /// let result = client.synchronize("pool.ntp.org").unwrap();
   ///
   /// println!("Leap indicator: {:?}", result.leap_indicator());
   /// ```
@@ -142,8 +142,8 @@ impl SynchronizationResult {
   /// use rsntp::SntpClient;
   /// use chrono::{DateTime, Local};
   ///
-  /// let client = SntpClient::new("pool.ntp.org").unwrap();
-  /// let result = client.synchronize().unwrap();
+  /// let client = SntpClient::new();
+  /// let result = client.synchronize("pool.ntp.org").unwrap();
   ///
   /// assert!(result.stratum() >= 1);
   /// ```

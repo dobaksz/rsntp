@@ -22,8 +22,8 @@
 //! use rsntp::SntpClient;
 //! use chrono::{DateTime, Local};
 //!
-//! let client = SntpClient::new("pool.ntp.org").unwrap();
-//! let result = client.synchronize().unwrap();
+//! let client = SntpClient::new();
+//! let result = client.synchronize("pool.ntp.org").unwrap();
 //!
 //! let local_time: DateTime<Local> = DateTime::from(result.datetime());
 //!
@@ -38,8 +38,8 @@
 //! use chrono::{DateTime, Local};
 //!
 //! async fn local_time() -> DateTime<Local> {
-//!   let client = AsyncSntpClient::new("pool.ntp.org");
-//!   let result = client.synchronize().await.unwrap();
+//!   let client = AsyncSntpClient::new();
+//!   let result = client.synchronize("pool.ntp.org").await.unwrap();
 //!
 //!   DateTime::from(result.datetime())
 //! }
@@ -59,15 +59,16 @@
 mod core_logic;
 mod error;
 mod packet;
+mod to_server_addrs;
 
 pub use core_logic::SynchronizationResult;
 pub use error::{KissCode, ProtocolError, SynchroniztationError};
 pub use packet::{LeapIndicator, ReferenceIdentifier};
+pub use to_server_addrs::ToServerAddrs;
 
 use core_logic::{Reply, Request};
 use packet::Packet;
-use std::io::ErrorKind;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
 #[cfg(feature = "async")]
@@ -77,53 +78,28 @@ const SNTP_PORT: u16 = 123;
 
 /// Blocking SNTP client instance
 ///
-/// This is the main entry point of the blocking API. It is an association between the local host and the
-/// remote server and can be reused, i.e. multiple synchronization can be executed with a single instance.
+/// This is the main entry point of the blocking API.
 #[derive(Clone, Debug, Hash)]
 pub struct SntpClient {
   bind_address: SocketAddr,
-  server_address: SocketAddr,
   timeout: Duration,
 }
 
 impl SntpClient {
-  /// Creates a new instance.
-  ///
-  /// The parameter is the server DNS name or IP addresss. It uses the default SNTP UDP port (123)
+  /// Creates a new instance with default parameters
   ///
   /// # Example
   ///
   /// ```no_run
   /// use rsntp::SntpClient;
   ///
-  /// let client = SntpClient::new("pool.ntp.org").unwrap();
+  /// let client = SntpClient::new();
   /// ```
-  pub fn new(server_address: &str) -> Result<SntpClient, std::io::Error> {
-    SntpClient::with_socket_addr((server_address, SNTP_PORT))
-  }
-
-  /// Creates a new instance for the given socket addres.
-  /// # Example
-  ///
-  /// ```no_run
-  /// use rsntp::SntpClient;
-  ///
-  /// let socket_addr = ("pool.ntp.org", 123);
-  /// let client = SntpClient::with_socket_addr(socket_addr).unwrap();
-  /// ```
-  pub fn with_socket_addr<T: ToSocketAddrs>(socket_addr: T) -> Result<SntpClient, std::io::Error> {
-    let server_address = socket_addr.to_socket_addrs()?.next().ok_or_else(|| {
-      std::io::Error::new(
-        ErrorKind::AddrNotAvailable,
-        "Failed to resolve server address",
-      )
-    })?;
-
-    Ok(SntpClient {
+  pub fn new() -> SntpClient {
+    SntpClient {
       bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-      server_address,
       timeout: Duration::from_secs(3),
-    })
+    }
   }
 
   /// Synchronize with the server
@@ -132,21 +108,21 @@ impl SntpClient {
   /// call and can block for quite long time. After sending the request it waits for a timeout and if no
   /// reply is received then an error is returned.
   ///
+  /// If the supplied server address resolves to multiple addresses then only the first one is used.
   ///
   /// # Example
   ///
   /// ```no_run
   /// use rsntp::SntpClient;
   ///
-  /// let socket_addr = ("pool.ntp.org", 123);
-  /// let client = SntpClient::with_socket_addr(socket_addr).unwrap();
-  /// let result = client.synchronize();
+  /// let client = SntpClient::new();
+  /// let result = client.synchronize("pool.ntp.org");
   /// ```
-  pub fn synchronize(&self) -> Result<SynchronizationResult, SynchroniztationError> {
+  pub fn synchronize<A: ToServerAddrs>(&self, server_address: A) -> Result<SynchronizationResult, SynchroniztationError> {
     let socket = std::net::UdpSocket::bind(self.bind_address)?;
 
     socket.set_read_timeout(Some(self.timeout))?;
-    socket.connect(self.server_address)?;
+    socket.connect(server_address.to_server_addrs(SNTP_PORT))?;
 
     let request = Request::new();
     let mut receive_buffer = [0; Packet::ENCODED_LEN];
@@ -170,7 +146,7 @@ impl SntpClient {
   /// use rsntp::SntpClient;
   /// use std::time::Duration;
   ///
-  /// let mut client = SntpClient::new("pool.ntp.org").unwrap();
+  /// let mut client = SntpClient::new();
   /// client.set_timeout(Duration::from_secs(10));
   /// ```
   pub fn set_timeout(&mut self, timeout: Duration) {
@@ -188,7 +164,7 @@ impl SntpClient {
   /// ```no_run
   /// use rsntp::SntpClient;
   ///
-  /// let mut client = SntpClient::new("pool.ntp.org").unwrap();
+  /// let mut client = SntpClient::new();
   /// client.set_bind_address("192.168.0.1:0".parse().unwrap());
   /// ```
   pub fn set_bind_address(&mut self, address: SocketAddr) {
@@ -196,38 +172,39 @@ impl SntpClient {
   }
 }
 
+impl Default for SntpClient {
+  fn default() -> Self {
+    SntpClient::new()
+  }
+}
+
 /// Asynchronous API client instance
 ///
 /// Only available when async feature is enabled (which is the default)
 ///
-/// This is the main entry point of the asynchronous API. It is an association between the local host and the
-/// remote server and can be reused, i.e. multiple synchronization can be executed with a single instance.
+/// This is the main entry point of the asynchronous API. 
 #[cfg(feature = "async")]
 pub struct AsyncSntpClient {
   bind_address: SocketAddr,
-  server_address: String,
   timeout: Duration,
 }
 
 #[cfg(feature = "async")]
 impl AsyncSntpClient {
-  /// Creates a new instance.
+  /// Creates a new instance with default parameters
   ///
   /// Only available when async feature is enabled (which is the default)
-  ///
-  /// The parameter is the server DNS name or IP addresss. It uses the default SNTP UDP port (123)
   ///
   /// # Example
   ///
   /// ```no_run
   /// use rsntp::AsyncSntpClient;
   ///
-  /// let client = AsyncSntpClient::new("pool.ntp.org");
+  /// let client = AsyncSntpClient::new();
   /// ```
-  pub fn new(server_address: &str) -> AsyncSntpClient {
+  pub fn new() -> AsyncSntpClient {
     AsyncSntpClient {
       bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-      server_address: server_address.into(),
       timeout: Duration::from_secs(3),
     }
   }
@@ -239,6 +216,8 @@ impl AsyncSntpClient {
   /// It sends a request to the server and processes the reply. If no reply is received within timeout
   /// then an error is returned.
   ///
+  /// If the supplied server address resolves to multiple addresses then only the first one is used.
+  ///
   /// # Example
   ///
   /// ```no_run
@@ -246,17 +225,16 @@ impl AsyncSntpClient {
   /// use chrono::{DateTime, Local};
   ///
   /// async fn local_time() -> Result<SynchronizationResult, SynchroniztationError> {
-  ///   let client = AsyncSntpClient::new("pool.ntp.org");
+  ///   let client = AsyncSntpClient::new();
   ///   
-  ///   client.synchronize().await
+  ///   client.synchronize("pool.ntp.org").await
   /// }
   /// ```
-  pub async fn synchronize(&self) -> Result<SynchronizationResult, SynchroniztationError> {
+  pub async fn synchronize<A: ToServerAddrs>(&self, server_address: A) -> Result<SynchronizationResult, SynchroniztationError> {
     let mut receive_buffer = [0; Packet::ENCODED_LEN];
-    let socket_address = (self.server_address.as_str(), SNTP_PORT);
 
     let mut socket = tokio::net::UdpSocket::bind(self.bind_address).await?;
-    socket.connect(socket_address).await?;
+    socket.connect(server_address.to_server_addrs(SNTP_PORT)).await?;
     let request = Request::new();
 
     socket.send(&request.as_bytes()).await?;
@@ -289,7 +267,7 @@ impl AsyncSntpClient {
   /// use rsntp::AsyncSntpClient;
   /// use std::time::Duration;
   ///
-  /// let mut client = AsyncSntpClient::new("pool.ntp.org");
+  /// let mut client = AsyncSntpClient::new();
   /// client.set_timeout(Duration::from_secs(10));
   /// ```
   pub fn set_timeout(&mut self, timeout: Duration) {
@@ -307,10 +285,17 @@ impl AsyncSntpClient {
   /// ```no_run
   /// use rsntp::AsyncSntpClient;
   ///
-  /// let mut client = AsyncSntpClient::new("pool.ntp.org");
+  /// let mut client = AsyncSntpClient::new();
   /// client.set_bind_address("192.168.0.1:0".parse().unwrap());
   /// ```
   pub fn set_bind_address(&mut self, address: SocketAddr) {
     self.bind_address = address;
+  }
+}
+
+#[cfg(feature = "async")]
+impl Default for AsyncSntpClient {
+  fn default() -> Self {
+    AsyncSntpClient::new()
   }
 }

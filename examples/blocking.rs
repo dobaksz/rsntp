@@ -1,6 +1,6 @@
 fn main() {
-  let client = rsntp::SntpClient::new("pool.ntp.org").unwrap();
-  let time_info = client.synchronize().unwrap();
+  let client = rsntp::SntpClient::new();
+  let time_info = client.synchronize("pool.ntp.org").unwrap();
 
   println!(
     "Clock offset: {} ms",
