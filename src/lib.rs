@@ -29,32 +29,34 @@
 //!
 //! println!("Current time is: {}", local_time);
 //! ```
-//!
-//! And a function which uses the asynchronous API to obtain local time:
-//!
-#[cfg_attr(feature = "async", doc = r##"
-//! ```no_run
-//! use rsntp::AsyncSntpClient;
-//! use chrono::{DateTime, Local};
-//!
-//! async fn local_time() -> DateTime<Local> {
-//!   let client = AsyncSntpClient::new();
-//!   let result = client.synchronize("pool.ntp.org").await.unwrap();
-//!
-//!   DateTime::from(result.datetime())
-//! }
-//! ```
-//!
-//! ## Disabling asynchronous API
-//!
-//! The asynchronous API is compiled in by default but you can optionally disable it. This removes
-//! dependency to `tokio` which reduces crate dependencies significantly.
-//!
-//! ```toml
-//! [dependencies]
-//! rsntp = { version = "0.3.2", default-features = false }
-//! ```
-"##)]
+#![cfg_attr(
+  feature = "async",
+  doc = r##"
+
+And a function which uses the asynchronous API to obtain local time:
+
+```no_run
+use rsntp::AsyncSntpClient;
+use chrono::{DateTime, Local};
+
+async fn local_time() -> DateTime<Local> {
+  let client = AsyncSntpClient::new();
+  let result = client.synchronize("pool.ntp.org").await.unwrap();
+  
+  DateTime::from(result.datetime())
+}
+```
+## Disabling asynchronous API
+
+The asynchronous API is compiled in by default but you can optionally disable it. This removes
+dependency to `tokio` which reduces crate dependencies significantly.
+
+```toml
+[dependencies]
+rsntp = { version = "0.3.2", default-features = false }
+```
+"##
+)]
 
 mod core_logic;
 mod error;
@@ -118,7 +120,10 @@ impl SntpClient {
   /// let client = SntpClient::new();
   /// let result = client.synchronize("pool.ntp.org");
   /// ```
-  pub fn synchronize<A: ToServerAddrs>(&self, server_address: A) -> Result<SynchronizationResult, SynchroniztationError> {
+  pub fn synchronize<A: ToServerAddrs>(
+    &self,
+    server_address: A,
+  ) -> Result<SynchronizationResult, SynchroniztationError> {
     let socket = std::net::UdpSocket::bind(self.bind_address)?;
 
     socket.set_read_timeout(Some(self.timeout))?;
@@ -182,7 +187,7 @@ impl Default for SntpClient {
 ///
 /// Only available when async feature is enabled (which is the default)
 ///
-/// This is the main entry point of the asynchronous API. 
+/// This is the main entry point of the asynchronous API.
 #[cfg(feature = "async")]
 pub struct AsyncSntpClient {
   bind_address: SocketAddr,
@@ -230,11 +235,16 @@ impl AsyncSntpClient {
   ///   client.synchronize("pool.ntp.org").await
   /// }
   /// ```
-  pub async fn synchronize<A: ToServerAddrs>(&self, server_address: A) -> Result<SynchronizationResult, SynchroniztationError> {
+  pub async fn synchronize<A: ToServerAddrs>(
+    &self,
+    server_address: A,
+  ) -> Result<SynchronizationResult, SynchroniztationError> {
     let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
     let mut socket = tokio::net::UdpSocket::bind(self.bind_address).await?;
-    socket.connect(server_address.to_server_addrs(SNTP_PORT)).await?;
+    socket
+      .connect(server_address.to_server_addrs(SNTP_PORT))
+      .await?;
     let request = Request::new();
 
     socket.send(&request.as_bytes()).await?;
