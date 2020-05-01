@@ -21,7 +21,7 @@ rsntp = "1.0.0"
 
 Obtain the current local time with the blocking API:
 
-```no_run
+```rust
 use rsntp::SntpClient;
 use chrono::{DateTime, Local};
 
@@ -35,7 +35,7 @@ println!("Current time is: {}", local_time);
 
 And a function which uses the asynchronous API to obtain local time:
 
-```no_run
+```rust
 use rsntp::AsyncSntpClient;
 use chrono::{DateTime, Local};
 
