@@ -21,31 +21,31 @@ rsntp = "0.3.2"
 
 Obtain the current local time with the blocking API:
 
-```rust
+```no_run
 use rsntp::SntpClient;
 use chrono::{DateTime, Local};
 
-let client = SntpClient::new("pool.ntp.org").unwrap();
-let result = client.synchronize().unwrap();
+let client = SntpClient::new();
+let result = client.synchronize("pool.ntp.org").unwrap();
 
 let local_time: DateTime<Local> = DateTime::from(result.datetime());
+
 println!("Current time is: {}", local_time);
 ```
 
 And a function which uses the asynchronous API to obtain local time:
 
-```rust
+```no_run
 use rsntp::AsyncSntpClient;
 use chrono::{DateTime, Local};
 
 async fn local_time() -> DateTime<Local> {
-  let client = AsyncSntpClient::new("pool.ntp.org");
-  let result = client.synchronize().await.unwrap();
-
+  let client = AsyncSntpClient::new();
+  let result = client.synchronize("pool.ntp.org").await.unwrap();
+  
   DateTime::from(result.datetime())
 }
 ```
-
 ## Disabling asynchronous API
 
 The asynchronous API is compiled in by default but you can optionally disable it. This removes
