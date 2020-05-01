@@ -16,19 +16,17 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV
 ///
 /// ```no_run
 /// use rsntp::ToServerAddrs;
-/// use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
+/// use std::net::Ipv4Addr;
 ///
-/// fn get_first_address<A: ToServerAddrs>(addr: A) -> SocketAddr {
-///   addr.to_server_addrs(1234).to_socket_addrs().unwrap().next().unwrap()
+/// fn connect<A: ToServerAddrs>(addr: A) {
+///   // connect to a server with default port 1234
 /// }
 ///
-/// let local_ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+/// connect("127.0.0.1"); // will connect to 127.0.0.1:1234
+/// connect("127.0.0.1:456"); // will connect to 127.0.0.1:456
 ///
-/// assert_eq!(get_first_address("127.0.0.1"), SocketAddr::new(local_ip, 1234));
-/// assert_eq!(get_first_address("127.0.0.1:456"), SocketAddr::new(local_ip, 456));
-///
-/// assert_eq!(get_first_address(local_ip), SocketAddr::new(local_ip, 1234));
-/// assert_eq!(get_first_address((local_ip, 456)), SocketAddr::new(local_ip, 456));
+/// connect(Ipv4Addr::new(127, 0, 0, 1)); // will connect to 127.0.0.1:1234
+/// connect((Ipv4Addr::new(127, 0, 0, 1), 456)); // will connect to 127.0.0.1:456
 ///
 /// ```
 pub trait ToServerAddrs {
