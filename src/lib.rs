@@ -13,7 +13,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! rsntp = "0.3.2"
+//! rsntp = "1.0.0"
 //! ```
 //!
 //! Obtain the current local time with the blocking API:
@@ -53,7 +53,7 @@ dependency to `tokio` which reduces crate dependencies significantly.
 
 ```toml
 [dependencies]
-rsntp = { version = "0.3.2", default-features = false }
+rsntp = { version = "1.0.0", default-features = false }
 ```
 "##
 )]
