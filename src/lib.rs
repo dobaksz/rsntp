@@ -133,11 +133,11 @@ impl SntpClient {
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
         socket.send(&request.as_bytes())?;
-        let bytes_received = socket.recv(&mut receive_buffer)?;
+        let (bytes_received, server_address) = socket.recv_from(&mut receive_buffer)?;
 
         let reply = Reply::new(
             request,
-            Packet::from_bytes(&receive_buffer[..bytes_received])?,
+            Packet::from_bytes(&receive_buffer[..bytes_received], server_address)?,
         );
 
         reply.process()
@@ -252,16 +252,17 @@ impl AsyncSntpClient {
 
         socket.send(&request.as_bytes()).await?;
 
-        let result_future = timeout(self.timeout, socket.recv(&mut receive_buffer));
+        let result_future = timeout(self.timeout, socket.recv_from(&mut receive_buffer));
 
-        let bytes_received = result_future.await.or(Err(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            "Timeout while waiting for server reply",
-        )))??;
+        let (bytes_received, server_address) =
+            result_future.await.or(Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Timeout while waiting for server reply",
+            )))??;
 
         let reply = Reply::new(
             request,
-            Packet::from_bytes(&receive_buffer[..bytes_received])?,
+            Packet::from_bytes(&receive_buffer[..bytes_received], server_address)?,
         );
 
         reply.process()

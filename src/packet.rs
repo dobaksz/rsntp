@@ -2,7 +2,7 @@ use crate::error::ProtocolError;
 use chrono::{DateTime, TimeZone, Utc};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SntpTimestamp(u128);
@@ -127,7 +127,7 @@ impl Mode {
 /// * For primary servers, the value is a four-character ASCII string. For possible values see RFC4330, section 4.
 /// * For IPv4 secondary servers, the value is the IPv4 address of the synchronization source.
 /// * For IPv6 secondary servers, the value is the first 32 bits of the MD5 hash of the IPv6 address of the
-///   synchronization source (IPv6 not yet supported by the library)
+///   synchronization source
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ReferenceIdentifier {
     /// No reference identifier. Currently should not used in public API
@@ -136,7 +136,7 @@ pub enum ReferenceIdentifier {
     ASCII(String),
     /// IPv4 address, identifiying an IPv4 secondary server
     IpAddress(IpAddr),
-    /// MD5 hash of an IPv6 address, identifying an IPv6 server (not yet supported)
+    /// MD5 hash of an IPv6 address, identifying an IPv6 server
     MD5Hash(u32),
 }
 
@@ -157,6 +157,10 @@ impl ReferenceIdentifier {
         Ok(ReferenceIdentifier::IpAddress(IpAddr::from(raw)))
     }
 
+    pub(crate) fn new_ipv6_hash(raw: [u8; 4]) -> Result<ReferenceIdentifier, ProtocolError> {
+        Ok(ReferenceIdentifier::MD5Hash(u32::from_be_bytes(raw)))
+    }
+
     fn is_empty(&self) -> bool {
         match self {
             ReferenceIdentifier::Empty => true,
@@ -171,7 +175,7 @@ impl Display for ReferenceIdentifier {
             ReferenceIdentifier::Empty => Ok(()),
             ReferenceIdentifier::ASCII(s) => write!(f, "{}", s),
             ReferenceIdentifier::IpAddress(addr) => write!(f, "{}", addr.to_string()),
-            ReferenceIdentifier::MD5Hash(_hash) => unimplemented!(),
+            ReferenceIdentifier::MD5Hash(hash) => write!(f, "{:#X}", hash),
         }
     }
 }
@@ -191,7 +195,7 @@ pub struct Packet {
 impl Packet {
     pub const ENCODED_LEN: usize = 48;
 
-    pub fn from_bytes(data: &[u8]) -> Result<Packet, ProtocolError> {
+    pub fn from_bytes(data: &[u8], server_address: SocketAddr) -> Result<Packet, ProtocolError> {
         if data.len() < Packet::ENCODED_LEN {
             return Err(ProtocolError::PacketIsTooShort);
         }
@@ -211,7 +215,11 @@ impl Packet {
         let reference_identifier = if stratum == 0 || stratum == 1 {
             ReferenceIdentifier::new_ascii(raw_reference_identifier)?
         } else {
-            ReferenceIdentifier::new_ipv4_address(raw_reference_identifier)?
+            if server_address.is_ipv4() {
+                ReferenceIdentifier::new_ipv4_address(raw_reference_identifier)?
+            } else {
+                ReferenceIdentifier::new_ipv6_hash(raw_reference_identifier)?
+            }
         };
 
         Ok(Packet {
@@ -338,7 +346,7 @@ mod tests {
             0x04, 0xeb, 0xd9, 0xdc, 0xb5, 0x78,
         ];
 
-        let packet = Packet::from_bytes(&raw).unwrap();
+        let packet = Packet::from_bytes(&raw, "127.0.0.1:1234".parse().unwrap()).unwrap();
 
         assert_eq!(packet.li, LeapIndicator::NoWarning);
         assert_eq!(packet.mode, Mode::Client);
@@ -376,7 +384,7 @@ mod tests {
         ];
 
         assert_eq!(
-            Packet::from_bytes(&raw).unwrap_err(),
+            Packet::from_bytes(&raw, "127.0.0.1:1234".parse().unwrap()).unwrap_err(),
             ProtocolError::InvalidPacketVersion
         );
     }
@@ -389,7 +397,7 @@ mod tests {
         ];
 
         assert_eq!(
-            Packet::from_bytes(&raw).unwrap_err(),
+            Packet::from_bytes(&raw, "127.0.0.1:1234".parse().unwrap()).unwrap_err(),
             ProtocolError::PacketIsTooShort
         );
     }
@@ -404,7 +412,7 @@ mod tests {
         ];
 
         assert_eq!(
-            Packet::from_bytes(&raw).unwrap_err(),
+            Packet::from_bytes(&raw, "127.0.0.1:1234".parse().unwrap()).unwrap_err(),
             ProtocolError::InvalidMode
         );
     }
@@ -474,7 +482,7 @@ mod tests {
             0x04, 0xeb, 0xd9, 0xdc, 0xb5, 0x78,
         ];
 
-        let packet = Packet::from_bytes(&raw).unwrap();
+        let packet = Packet::from_bytes(&raw, "127.0.0.1:1234".parse().unwrap()).unwrap();
 
         assert_eq!(
             packet.reference_identifier,
@@ -491,11 +499,29 @@ mod tests {
             0x04, 0xeb, 0xd9, 0xdc, 0xb5, 0x78,
         ];
 
-        let packet = Packet::from_bytes(&raw).unwrap();
+        let packet = Packet::from_bytes(&raw, "127.0.0.1:1234".parse().unwrap()).unwrap();
 
         assert_eq!(
             packet.reference_identifier,
             ReferenceIdentifier::ASCII("GPS".into())
+        );
+    }
+
+    #[test]
+    fn decoding_ipv6_hash_reference_identifier_works() {
+        let raw = [
+            0x23, 0x02, 0x0a, 0xec, 0x00, 0x00, 0x02, 0x86, 0x00, 0x00, 0x0b, 0x33, 0x01, 0x02,
+            0x03, 0x04, 0xc5, 0x02, 0x02, 0xac, 0x41, 0x6e, 0x15, 0x87, 0xc5, 0x02, 0x04, 0xec,
+            0xee, 0xd3, 0x3c, 0x52, 0xc5, 0x02, 0x04, 0xeb, 0xd9, 0xd8, 0xd7, 0x9d, 0xc5, 0x02,
+            0x04, 0xeb, 0xd9, 0xdc, 0xb5, 0x78,
+        ];
+
+        let packet =
+            Packet::from_bytes(&raw, (std::net::Ipv6Addr::LOCALHOST, 1234).into()).unwrap();
+
+        assert_eq!(
+            packet.reference_identifier,
+            ReferenceIdentifier::MD5Hash(0x01020304)
         );
     }
 }
