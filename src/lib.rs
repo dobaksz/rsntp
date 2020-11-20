@@ -254,11 +254,12 @@ impl AsyncSntpClient {
 
         let result_future = timeout(self.timeout, socket.recv_from(&mut receive_buffer));
 
-        let (bytes_received, server_address) =
-            result_future.await.or(Err(std::io::Error::new(
+        let (bytes_received, server_address) = result_future.await.map_err(|_| {
+            std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
                 "Timeout while waiting for server reply",
-            )))??;
+            )
+        })??;
 
         let reply = Reply::new(
             request,

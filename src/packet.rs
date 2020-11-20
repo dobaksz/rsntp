@@ -162,10 +162,7 @@ impl ReferenceIdentifier {
     }
 
     fn is_empty(&self) -> bool {
-        match self {
-            ReferenceIdentifier::Empty => true,
-            _ => false,
-        }
+        matches!(self, ReferenceIdentifier::Empty)
     }
 }
 
@@ -214,12 +211,10 @@ impl Packet {
 
         let reference_identifier = if stratum == 0 || stratum == 1 {
             ReferenceIdentifier::new_ascii(raw_reference_identifier)?
+        } else if server_address.is_ipv4() {
+            ReferenceIdentifier::new_ipv4_address(raw_reference_identifier)?
         } else {
-            if server_address.is_ipv4() {
-                ReferenceIdentifier::new_ipv4_address(raw_reference_identifier)?
-            } else {
-                ReferenceIdentifier::new_ipv6_hash(raw_reference_identifier)?
-            }
+            ReferenceIdentifier::new_ipv6_hash(raw_reference_identifier)?
         };
 
         Ok(Packet {
