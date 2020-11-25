@@ -29,6 +29,7 @@
 //!
 //! println!("Current time is: {}", local_time);
 //! ```
+//!
 #![cfg_attr(
     feature = "async",
     doc = r##"
@@ -57,6 +58,26 @@ rsntp = { version = "1.0.2", default-features = false }
 ```
 "##
 )]
+//! ## IPv6 support
+//!
+//! The library supports IPv6, but by default (for compatilibty reasons) it binds its UDP socket to an
+//! IPv4 address (0.0.0.0) which prevents sychonzitation with IPv6 servers.
+//!
+//! To use IPv6 you need to set the bind address to an IPv6 one:
+//!
+//! ```no_run
+//! use chrono::{DateTime, Local};
+//! use rsntp::SntpClient;
+//! use std::net::Ipv6Addr;
+//!
+//! let mut client = SntpClient::new();
+//! client.set_bind_address((Ipv6Addr::UNSPECIFIED, 0).into());
+//!
+//! let result = client.synchronize("2.pool.ntp.org").unwrap();
+//!
+//! let local_time: DateTime<Local> = DateTime::from(result.datetime());
+//! ```
+//!
 
 mod core_logic;
 mod error;
