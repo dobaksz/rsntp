@@ -3,9 +3,11 @@
 //! An [RFC 4330](https://tools.ietf.org/html/rfc4330) compliant Simple Network Time Protocol (SNTP) client
 //! library for Rust.
 //!
-//! `rsntp` provides both a synchronous (blocking) and an (optional) asynchronous API which allows
-//! synchronization with SNTPv4 servers. Time and date handling is based on the `chrono` crate.
+//! `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
 //!
+//! * Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
+//! * Time and date handling based on the `chrono` crate
+//! * IPv6 support
 //!
 //! ## Usage
 //!
@@ -34,7 +36,7 @@
     feature = "async",
     doc = r##"
 
-And a function which uses the asynchronous API to obtain local time:
+A function which uses the asynchronous API to obtain local time:
 
 ```no_run
 use rsntp::AsyncSntpClient;
@@ -49,7 +51,7 @@ async fn local_time() -> DateTime<Local> {
 ```
 ## Disabling asynchronous API
 
-The asynchronous API is compiled in by default but you can optionally disable it. This removes
+The asynchronous API is enabled by default but you can optionally disable it. This removes
 dependency to `tokio` which reduces crate dependencies significantly.
 
 ```toml
@@ -60,10 +62,10 @@ rsntp = { version = "1.0.2", default-features = false }
 )]
 //! ## IPv6 support
 //!
-//! The library supports IPv6, but by default (for compatilibty reasons) it binds its UDP socket to an
-//! IPv4 address (0.0.0.0) which prevents sychonzitation with IPv6 servers.
+//! `rsntp` supports IPv6, but by default (for compatilibty reasons) it binds its UDP socket to an
+//! IPv4 address (0.0.0.0) which might prevent synchronization with IPv6 servers.
 //!
-//! To use IPv6 you need to set the bind address to an IPv6 one:
+//! To use IPv6, you need to set an IPv6 bind address:
 //!
 //! ```no_run
 //! use chrono::{DateTime, Local};
@@ -99,7 +101,7 @@ use tokio::time::timeout;
 
 const SNTP_PORT: u16 = 123;
 
-/// Blocking SNTP client instance
+/// Blocking client instance
 ///
 /// This is the main entry point of the blocking API.
 #[derive(Clone, Debug, Hash)]
@@ -127,8 +129,8 @@ impl SntpClient {
 
     /// Synchronize with the server
     ///
-    /// It sends a request to the server, waits for the reply and processes that reply. This is a blocking
-    /// call and can block for quite long time. After sending the request it waits for a timeout and if no
+    /// Sends a request to the server, waits for the reply and processes it. This is a blocking call
+    /// and can block for quite long time. After sending the request it waits for a timeout and if no
     /// reply is received then an error is returned.
     ///
     /// If the supplied server address resolves to multiple addresses then only the first one is used.
@@ -182,11 +184,12 @@ impl SntpClient {
         self.timeout = timeout;
     }
 
-    /// Set bind address of the client
+    /// Set UDP bind address
     ///
-    /// This is the local address which is used to send/receive UDP packets. It can
-    /// be used to bind the client to a specific IP address or port. By default it is
-    /// "0.0.0.0:0" which means that both IP address and port are chosen automatically.
+    /// Sets the local address which is used to send/receive UDP packets. By default it is
+    /// "0.0.0.0:0" which means that an IPv4 address and a port is chosen automatically.
+    ///
+    /// To synchronize with IPv6 servers, you might need to set it to an IPv6 address.
     ///
     /// # Example
     ///
@@ -207,7 +210,7 @@ impl Default for SntpClient {
     }
 }
 
-/// Asynchronous API client instance
+/// Asynchronous client instance
 ///
 /// Only available when async feature is enabled (which is the default)
 ///
@@ -242,10 +245,9 @@ impl AsyncSntpClient {
     ///
     /// Only available when async feature is enabled (which is the default)
     ///
-    /// It sends a request to the server and processes the reply. If no reply is received within timeout
-    /// then an error is returned.
-    ///
-    /// If the supplied server address resolves to multiple addresses then only the first one is used.
+    /// Sends a request to the server and processes the reply. If no reply is received within timeout
+    /// then an error is returned. If the supplied server address resolves to multiple addresses then
+    /// only the first one is used.
     ///
     /// # Example
     ///
@@ -292,7 +294,7 @@ impl AsyncSntpClient {
 
     /// Sets synchronization timeout
     ///
-    /// This sets the amount of time which the client waits for reply after the request has been sent.
+    /// Sets the amount of time which the client waits for reply after the request has been sent.
     /// Default is 3 seconds.
     ///
     /// # Example
@@ -308,11 +310,12 @@ impl AsyncSntpClient {
         self.timeout = timeout;
     }
 
-    /// Set bind address of the client
+    /// Set UDP bind address
     ///
-    /// This is the local address which is used to send/receive UDP packets. It can
-    /// be used to bind the client to a specific IP address or port. By default it is
-    /// "0.0.0.0:0" which means that both IP address and port are chosen automatically.
+    /// Sets the local address which is used to send/receive UDP packets. By default it is
+    /// "0.0.0.0:0" which means that an IPv4 address and a port is chosen automatically.
+    ///
+    /// To synchronize with IPv6 servers, you might need to set it to an IPv6 address.
     ///
     /// # Example
     ///

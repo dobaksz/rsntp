@@ -5,8 +5,8 @@ use chrono::{DateTime, Duration, Utc};
 /// Results of a synchronization.
 ///
 /// If you just simply need a fairly accurate SNTP time then check the `datetime()` method. Other methods
-/// provide more detailed information received from the server and might need deeper knwoledge about
-/// SNTP protocol internals.
+/// provide more detailed information about the outcome of the synchronization and might need deeper
+/// knwoledge about  SNTP protocol internals.
 #[derive(Debug, Clone)]
 pub struct SynchronizationResult {
     clock_offset: Duration,
@@ -17,7 +17,7 @@ pub struct SynchronizationResult {
 }
 
 impl SynchronizationResult {
-    /// Returns with the offset between the server and local clock.
+    /// Returns with the offset between server and local clock.
     ///
     /// It is a signed duration, negative value means the local clock is ahead.
     ///
@@ -61,7 +61,8 @@ impl SynchronizationResult {
     /// Returns with the server reference identifier.
     ///
     /// This identifies the synchronizaion source of the server. For primary servers (startum = 1) this is a four
-    /// byte ASCII string, for secondary IPv4 servers (startum >= 2) this is an IP address.
+    /// byte ASCII string, for secondary IPv4 servers (startum >= 2) this is an IP address, for secondary IPv6
+    /// servers this contains first 32 bits of an MD5 hash of an IPv6 address.
     ///   
     /// # Example
     ///
@@ -81,7 +82,7 @@ impl SynchronizationResult {
     /// Returns with the current UTC date and time, based on the synchronized SNTP timestamp.
     ///
     /// This is the current UTC date and time, calculated by adding clock offset the UTC time. To be accurate,
-    /// use the returned value immediately after the call of this function.
+    /// use the returned value immediately.
     ///
     /// # Example
     ///

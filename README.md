@@ -6,8 +6,11 @@
 An [RFC 4330](https://tools.ietf.org/html/rfc4330) compliant Simple Network Time Protocol (SNTP) client
 library for Rust.
 
-`rsntp` provides both a synchronous (blocking) and an (optional) asynchronous API which allows
-synchronization with SNTPv4 servers. Time and date handling is based on the `chrono` crate.
+`rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
+
+* Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
+* Time and date handling based on the `chrono` crate
+* IPv6 support
 
 
 ## Usage
@@ -33,7 +36,7 @@ let local_time: DateTime<Local> = DateTime::from(result.datetime());
 println!("Current time is: {}", local_time);
 ```
 
-And a function which uses the asynchronous API to obtain local time:
+A function which uses the asynchronous API to obtain local time:
 
 ```rust
 use rsntp::AsyncSntpClient;
@@ -48,7 +51,7 @@ async fn local_time() -> DateTime<Local> {
 ```
 ## Disabling asynchronous API
 
-The asynchronous API is compiled in by default but you can optionally disable it. This removes
+The asynchronous API is enabled by default but you can optionally disable it. This removes
 dependency to `tokio` which reduces crate dependencies significantly.
 
 ```toml
@@ -58,10 +61,10 @@ rsntp = { version = "1.0.2", default-features = false }
 
 ## IPv6 support
 
-The library supports IPv6, but by default (for compatilibty reasons) it binds its UDP socket to an
-IPv4 address (0.0.0.0) which prevents sychonzitation with IPv6 servers.
+`rsntp` supports IPv6, but by default (for compatilibty reasons) it binds its UDP socket to an
+IPv4 address (0.0.0.0) which might prevent synchronization with IPv6 servers.
 
-To use IPv6 you need to set the bind address to an IPv6 one:
+To use IPv6, you need to set an IPv6 bind address:
 
 ```rust
 use chrono::{DateTime, Local};

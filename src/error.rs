@@ -5,9 +5,9 @@ use std::fmt::{Display, Formatter};
 
 /// Kiss code, reason of a Kiss-o'-Death reply.
 ///
-/// Kiss code provides an information about why SNTP sent a Kiss-o'-Death packet, i.e. why the
-/// request is rejected by the server. This enum is generally a 1-to-1 mapping for SNTP RFC kiss
-/// codes, see RFC 4330 section 8.
+/// Kiss code provides an information about why the SNTP server sent a Kiss-o'-Death packet, i.e.
+/// why the request is rejected. This enum is generally a 1-to-1 mapping for SNTP RFC kiss codes,
+/// see RFC 4330 section 8.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum KissCode {
     /// Unknown code
