@@ -19,7 +19,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rsntp = "1.0.2"
+rsntp = "1.0.3"
 ```
 
 Obtain the current local time with the blocking API:
@@ -56,7 +56,7 @@ dependency to `tokio` which reduces crate dependencies significantly.
 
 ```toml
 [dependencies]
-rsntp = { version = "1.0.2", default-features = false }
+rsntp = { version = "1.0.3", default-features = false }
 ```
 
 ## IPv6 support
