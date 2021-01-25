@@ -267,7 +267,7 @@ impl AsyncSntpClient {
     ) -> Result<SynchronizationResult, SynchroniztationError> {
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
-        let mut socket = tokio::net::UdpSocket::bind(self.bind_address).await?;
+        let socket = tokio::net::UdpSocket::bind(self.bind_address).await?;
         socket
             .connect(server_address.to_server_addrs(SNTP_PORT))
             .await?;
