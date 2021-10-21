@@ -169,11 +169,11 @@ impl Config {
     /// # Example
     ///
     /// ```no_run
-    /// use rsntp::{Config, AsyncSntpClient};
+    /// use rsntp::{Config, SntpClient};
     /// use std::time::Duration;
     ///
     /// let config = Config::default().timeout(Duration::from_secs(10));
-    /// let client = AsyncSntpClient::with_config(config);
+    /// let client = SntpClient::with_config(config);
     /// ```
     pub fn timeout(self, timeout: Duration) -> Config {
         Config {
