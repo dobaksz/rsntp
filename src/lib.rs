@@ -69,11 +69,11 @@ rsntp = { version = "2.0.0", default-features = false }
 //!
 //! ```no_run
 //! use chrono::{DateTime, Local};
-//! use rsntp::SntpClient;
+//! use rsntp::{Config, SntpClient};
 //! use std::net::Ipv6Addr;
 //!
-//! let mut client = SntpClient::new();
-//! client.set_bind_address((Ipv6Addr::UNSPECIFIED, 0).into());
+//! let config = Config::default().bind_address((Ipv6Addr::UNSPECIFIED, 0).into());
+//! let client = SntpClient::with_config(config);
 //!
 //! let result = client.synchronize("2.pool.ntp.org").unwrap();
 //!
@@ -101,17 +101,98 @@ use tokio::time::timeout;
 
 const SNTP_PORT: u16 = 123;
 
+/// Client configuration
+///
+/// This is a struct which contains the configuration of a client. It uses a builder-like pattern
+/// to set parameters. Its main aim is to be able to create client instances with non-default
+/// configuration without making them mutable.
+///
+/// # Example
+///
+/// ```no_run
+/// use rsntp::{Config, SntpClient};
+/// use std::time::Duration;
+///
+/// let config = Config::default().bind_address("192.168.0.1:0".parse().unwrap()).timeout(Duration::from_secs(10));
+/// let client = SntpClient::with_config(config);
+/// ```
+#[derive(Clone, Debug, Hash)]
+pub struct Config {
+    bind_address: SocketAddr,
+    timeout: Duration,
+}
+
+impl Config {
+    /// Creates an instance with default configuration
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::Config;
+    ///
+    /// let config = Config::default();
+    /// ```
+    pub fn default() -> Config {
+        Config {
+            bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            timeout: Duration::from_secs(3),
+        }
+    }
+
+    /// Set UDP bind address
+    ///
+    /// Sets the local address which is used to send/receive UDP packets. By default it is
+    /// "0.0.0.0:0" which means that an IPv4 address and a port is chosen automatically.
+    ///
+    /// To synchronize with IPv6 servers, you might need to set it to an IPv6 address.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::{Config, SntpClient};
+    ///
+    /// let config = Config::default().bind_address("192.168.0.1:0".parse().unwrap());
+    /// let client = SntpClient::with_config(config);
+    /// ```
+    pub fn bind_address(self, address: SocketAddr) -> Config {
+        Config {
+            bind_address: address,
+            timeout: self.timeout,
+        }
+    }
+
+    /// Sets synchronization timeout
+    ///
+    /// Sets the amount of time which the client waits for reply after the request has been sent.
+    /// Default is 3 seconds.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::{Config, AsyncSntpClient};
+    /// use std::time::Duration;
+    ///
+    /// let config = Config::default().timeout(Duration::from_secs(10));
+    /// let client = AsyncSntpClient::with_config(config);
+    /// ```
+    pub fn timeout(self, timeout: Duration) -> Config {
+        Config {
+            bind_address: self.bind_address,
+            timeout,
+        }
+    }
+}
+
 /// Blocking client instance
 ///
 /// This is the main entry point of the blocking API.
 #[derive(Clone, Debug, Hash)]
 pub struct SntpClient {
-    bind_address: SocketAddr,
-    timeout: Duration,
+    config: Config,
 }
 
 impl SntpClient {
-    /// Creates a new instance with default parameters
+    /// Creates a new instance with default configuration
     ///
     /// # Example
     ///
@@ -122,9 +203,20 @@ impl SntpClient {
     /// ```
     pub fn new() -> SntpClient {
         SntpClient {
-            bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            timeout: Duration::from_secs(3),
+            config: Config::default(),
         }
+    }
+
+    /// Creates a new instance with a specific configuration
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::{Config, SntpClient};
+    ///
+    /// let client = SntpClient::with_config(Config::default());
+    /// ```
+    pub fn with_config(config: Config) -> SntpClient {
+        SntpClient { config }
     }
 
     /// Synchronize with the server
@@ -147,9 +239,9 @@ impl SntpClient {
         &self,
         server_address: A,
     ) -> Result<SynchronizationResult, SynchroniztationError> {
-        let socket = std::net::UdpSocket::bind(self.bind_address)?;
+        let socket = std::net::UdpSocket::bind(self.config.bind_address)?;
 
-        socket.set_read_timeout(Some(self.timeout))?;
+        socket.set_read_timeout(Some(self.config.timeout))?;
         socket.connect(server_address.to_server_addrs(SNTP_PORT))?;
 
         let request = Request::new();
@@ -181,7 +273,7 @@ impl SntpClient {
     /// client.set_timeout(Duration::from_secs(10));
     /// ```
     pub fn set_timeout(&mut self, timeout: Duration) {
-        self.timeout = timeout;
+        self.config.timeout = timeout;
     }
 
     /// Set UDP bind address
@@ -200,7 +292,11 @@ impl SntpClient {
     /// client.set_bind_address("192.168.0.1:0".parse().unwrap());
     /// ```
     pub fn set_bind_address(&mut self, address: SocketAddr) {
-        self.bind_address = address;
+        self.config.bind_address = address;
+    }
+
+    pub fn set_config(&mut self, config: &Config) {
+        self.config = config.clone()
     }
 }
 
@@ -217,13 +313,12 @@ impl Default for SntpClient {
 /// This is the main entry point of the asynchronous API.
 #[cfg(feature = "async")]
 pub struct AsyncSntpClient {
-    bind_address: SocketAddr,
-    timeout: Duration,
+    config: Config,
 }
 
 #[cfg(feature = "async")]
 impl AsyncSntpClient {
-    /// Creates a new instance with default parameters
+    /// Creates a new instance with default configuration
     ///
     /// Only available when async feature is enabled (which is the default)
     ///
@@ -236,9 +331,23 @@ impl AsyncSntpClient {
     /// ```
     pub fn new() -> AsyncSntpClient {
         AsyncSntpClient {
-            bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            timeout: Duration::from_secs(3),
+            config: Config::default(),
         }
+    }
+
+    /// Creates a new instance with a specific configuration
+    ///
+    /// Only available when async feature is enabled (which is the default)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::{Config, AsyncSntpClient};
+    ///
+    /// let client = AsyncSntpClient::with_config(Config::default());
+    /// ```
+    pub fn with_config(config: Config) -> AsyncSntpClient {
+        AsyncSntpClient { config }
     }
 
     /// Synchronize with the server
@@ -267,7 +376,7 @@ impl AsyncSntpClient {
     ) -> Result<SynchronizationResult, SynchroniztationError> {
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
-        let socket = tokio::net::UdpSocket::bind(self.bind_address).await?;
+        let socket = tokio::net::UdpSocket::bind(self.config.bind_address).await?;
         socket
             .connect(server_address.to_server_addrs(SNTP_PORT))
             .await?;
@@ -275,7 +384,7 @@ impl AsyncSntpClient {
 
         socket.send(&request.as_bytes()).await?;
 
-        let result_future = timeout(self.timeout, socket.recv_from(&mut receive_buffer));
+        let result_future = timeout(self.config.timeout, socket.recv_from(&mut receive_buffer));
 
         let (bytes_received, server_address) = result_future.await.map_err(|_| {
             std::io::Error::new(
@@ -307,7 +416,7 @@ impl AsyncSntpClient {
     /// client.set_timeout(Duration::from_secs(10));
     /// ```
     pub fn set_timeout(&mut self, timeout: Duration) {
-        self.timeout = timeout;
+        self.config.timeout = timeout;
     }
 
     /// Set UDP bind address
@@ -326,7 +435,7 @@ impl AsyncSntpClient {
     /// client.set_bind_address("192.168.0.1:0".parse().unwrap());
     /// ```
     pub fn set_bind_address(&mut self, address: SocketAddr) {
-        self.bind_address = address;
+        self.config.bind_address = address;
     }
 }
 
