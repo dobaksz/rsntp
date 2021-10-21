@@ -68,11 +68,11 @@ To use IPv6, you need to set an IPv6 bind address:
 
 ```rust
 use chrono::{DateTime, Local};
-use rsntp::SntpClient;
+use rsntp::{Config, SntpClient};
 use std::net::Ipv6Addr;
 
-let mut client = SntpClient::new();
-client.set_bind_address((Ipv6Addr::UNSPECIFIED, 0).into());
+let config = Config::default().bind_address((Ipv6Addr::UNSPECIFIED, 0).into());
+let client = SntpClient::with_config(config);
 
 let result = client.synchronize("2.pool.ntp.org").unwrap();
 
