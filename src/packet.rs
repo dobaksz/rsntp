@@ -35,7 +35,7 @@ impl SntpTimestamp {
         SntpTimestamp(((seconds as u128) << 32) + subsec_nanos)
     }
 
-    fn to_bytes(&self) -> [u8; 8] {
+    fn to_bytes(self) -> [u8; 8] {
         assert!(self.0 < 0x0002_0000_0000_0000_0000);
 
         let timestamp = if self.0 < 0x0001_0000_0000_0000_0000 {
@@ -47,7 +47,7 @@ impl SntpTimestamp {
         timestamp.to_be_bytes()
     }
 
-    pub fn to_datetime(&self) -> DateTime<Utc> {
+    pub fn to_datetime(self) -> DateTime<Utc> {
         let secs = (self.0 >> 32) as i64 - (SntpTimestamp::UNIX_EPOCH as i64);
         let nsecs: u32 = (((self.0 & 0xffff_ffff) * 1_000_000_000) >> 32)
             .try_into()
