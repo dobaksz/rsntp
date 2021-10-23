@@ -1,5 +1,8 @@
 # Changlelog
 
+## 2.1.0
+- New configuration API, which allows to set instance config without making it mutable
+
 ## 2.0.0
 - Use tokio 1.0
 
