@@ -295,8 +295,18 @@ impl SntpClient {
         self.config.bind_address = address;
     }
 
-    pub fn set_config(&mut self, config: &Config) {
-        self.config = config.clone()
+    /// Set the configuration
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::{Config, SntpClient};
+    ///
+    /// let client = SntpClient::new();
+    /// let config = Config::default().bind_address("192.168.0.1:0".parse().unwrap());
+    /// ```
+    pub fn set_config(&mut self, config: Config) {
+        self.config = config
     }
 }
 
@@ -436,6 +446,20 @@ impl AsyncSntpClient {
     /// ```
     pub fn set_bind_address(&mut self, address: SocketAddr) {
         self.config.bind_address = address;
+    }
+
+    /// Set the configuration
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::{Config, AsyncSntpClient};
+    ///
+    /// let client = AsyncSntpClient::new();
+    /// let config = Config::default().bind_address("192.168.0.1:0".parse().unwrap());
+    /// ```
+    pub fn set_config(&mut self, config: Config) {
+        self.config = config
     }
 }
 
