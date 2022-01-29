@@ -9,7 +9,7 @@ library for Rust.
 `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
 
 * Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
-* Time and date handling based on the `chrono` crate
+* Time and date handling based either on the `chrono` or `time` crates
 * IPv6 support
 
 

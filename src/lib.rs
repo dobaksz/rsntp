@@ -6,7 +6,7 @@
 //! `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
 //!
 //! * Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
-//! * Time and date handling based on the `chrono` crate
+//! * Time and date handling based either on the `chrono` or `time` crates
 //! * IPv6 support
 //!
 //! ## Usage
@@ -80,6 +80,11 @@ rsntp = { version = "2.1.0", default-features = false }
 //! let local_time: DateTime<Local> = DateTime::from(result.datetime());
 //! ```
 //!
+
+#[cfg(all(feature = "chrono", feature = "time"))]
+compile_error!("rsntp can only be compiled with one of the following features: `chrono`, `time`");
+#[cfg(not(any(feature = "chrono", feature = "time")))]
+compile_error!("rsntp requires at least one of the following features: `chrono`, `time`");
 
 mod core_logic;
 mod error;

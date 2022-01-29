@@ -1,6 +1,9 @@
 use crate::error::{KissCode, ProtocolError, SynchroniztationError};
 use crate::packet::{LeapIndicator, Mode, Packet, ReferenceIdentifier, SntpTimestamp};
+#[cfg(feature = "chrono")]
 use chrono::{DateTime, Duration, Utc};
+#[cfg(feature = "time")]
+use time::{Duration, OffsetDateTime};
 
 /// Results of a synchronization.
 ///
@@ -96,8 +99,31 @@ impl SynchronizationResult {
     ///
     /// let local_time: DateTime<Local> = DateTime::from(result.datetime());
     /// ```
+    #[cfg(feature = "chrono")]
     pub fn datetime(&self) -> DateTime<Utc> {
         Utc::now() + self.clock_offset
+    }
+
+    /// Returns with the current UTC date and time, based on the synchronized SNTP timestamp.
+    ///
+    /// This is the current UTC date and time, calculated by adding clock offset the UTC time. To be accurate,
+    /// use the returned value immediately.
+    ///
+    /// # Example
+    ///
+    /// Calcuating synchronized local time:
+    /// ```no_run
+    /// use rsntp::SntpClient;
+    /// use chrono::{DateTime, Local};
+    ///
+    /// let client = SntpClient::new();
+    /// let result = client.synchronize("pool.ntp.org").unwrap();
+    ///
+    /// let local_time: DateTime<Local> = DateTime::from(result.datetime());
+    /// ```
+    #[cfg(feature = "time")]
+    pub fn datetime(&self) -> OffsetDateTime {
+        OffsetDateTime::now_utc() + self.clock_offset
     }
 
     /// Returns with the leap indicator
@@ -159,6 +185,10 @@ pub struct Request {
 
 impl Request {
     pub fn new() -> Request {
+        #[cfg(feature = "chrono")]
+        let transmit_timestamp = SntpTimestamp::from_datetime(Utc::now());
+        #[cfg(feature = "time")]
+        let transmit_timestamp = SntpTimestamp::from_datetime(OffsetDateTime::now_utc());
         Request {
             packet: Packet {
                 li: LeapIndicator::NoWarning,
@@ -168,7 +198,7 @@ impl Request {
                 reference_timestamp: SntpTimestamp::zero(),
                 originate_timestamp: SntpTimestamp::zero(),
                 receive_timestamp: SntpTimestamp::zero(),
-                transmit_timestamp: SntpTimestamp::from_datetime(Utc::now()),
+                transmit_timestamp,
             },
         }
     }
@@ -182,18 +212,37 @@ impl Request {
     }
 }
 
+#[cfg(feature = "chrono")]
 pub struct Reply {
     request: Packet,
     reply: Packet,
     reply_timestamp: DateTime<Utc>,
 }
 
+#[cfg(feature = "time")]
+pub struct Reply {
+    request: Packet,
+    reply: Packet,
+    reply_timestamp: OffsetDateTime,
+}
+
 impl Reply {
     pub fn new(request: Request, reply: Packet) -> Reply {
-        Reply {
-            request: request.into_packet(),
-            reply,
-            reply_timestamp: Utc::now(),
+        #[cfg(feature = "chrono")]
+        {
+            Reply {
+                request: request.into_packet(),
+                reply,
+                reply_timestamp: Utc::now(),
+            }
+        }
+        #[cfg(feature = "time")]
+        {
+            Reply {
+                request: request.into_packet(),
+                reply,
+                reply_timestamp: OffsetDateTime::now_utc(),
+            }
         }
     }
 
@@ -255,9 +304,13 @@ mod tests {
     fn basic_synchronization_works() {
         let request = Request::new();
 
-        std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
+        let sleep_duration = std::time::Duration::from_millis(100);
+        std::thread::sleep(sleep_duration);
+        #[cfg(feature = "chrono")]
         let now = Utc::now();
-        std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
+        #[cfg(feature = "time")]
+        let now = OffsetDateTime::now_utc();
+        std::thread::sleep(sleep_duration);
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -274,8 +327,16 @@ mod tests {
 
         let result = reply.process().unwrap();
 
-        assert_between!(result.clock_offset().num_milliseconds(), -510, -490);
-        assert_between!(result.round_trip_delay().num_milliseconds(), 190, 210);
+        #[cfg(feature = "chrono")]
+        let num_milliseconds = result.clock_offset().num_milliseconds();
+        #[cfg(feature = "time")]
+        let num_milliseconds = result.clock_offset().whole_milliseconds();
+        assert_between!(num_milliseconds, -510, -490);
+        #[cfg(feature = "chrono")]
+        let round_trip_delay = result.round_trip_delay().num_milliseconds();
+        #[cfg(feature = "time")]
+        let round_trip_delay = result.round_trip_delay().whole_milliseconds();
+        assert_between!(round_trip_delay, 190, 210);
 
         assert_eq!(result.reference_identifier().to_string(), "LOCL");
         assert_eq!(result.leap_indicator(), LeapIndicator::NoWarning);
@@ -285,7 +346,10 @@ mod tests {
     #[test]
     fn sync_fails_if_reply_originate_ts_does_not_match_request_transmit_ts() {
         let request = Request::new();
+        #[cfg(feature = "chrono")]
         let now = Utc::now();
+        #[cfg(feature = "time")]
+        let now = OffsetDateTime::now_utc();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -308,7 +372,10 @@ mod tests {
     #[test]
     fn sync_fails_if_reply_contains_zero_transmit_timestamp() {
         let request = Request::new();
+        #[cfg(feature = "chrono")]
         let now = Utc::now();
+        #[cfg(feature = "time")]
+        let now = OffsetDateTime::now_utc();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -331,7 +398,10 @@ mod tests {
     #[test]
     fn sync_fails_if_reply_contains_wrong_mode() {
         let request = Request::new();
+        #[cfg(feature = "chrono")]
         let now = Utc::now();
+        #[cfg(feature = "time")]
+        let now = OffsetDateTime::now_utc();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -354,7 +424,10 @@ mod tests {
     #[test]
     fn sync_fails_if_kiss_o_death_received() {
         let request = Request::new();
+        #[cfg(feature = "chrono")]
         let now = Utc::now();
+        #[cfg(feature = "time")]
+        let now = OffsetDateTime::now_utc();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,

@@ -1,8 +1,11 @@
 use crate::error::ProtocolError;
+#[cfg(feature = "chrono")]
 use chrono::{DateTime, TimeZone, Utc};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
+#[cfg(feature = "time")]
+use time::{Duration, OffsetDateTime};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SntpTimestamp(u128);
@@ -28,9 +31,18 @@ impl SntpTimestamp {
         }
     }
 
+    #[cfg(feature = "chrono")]
     pub fn from_datetime<T: TimeZone>(datetime: DateTime<T>) -> SntpTimestamp {
         let seconds = datetime.timestamp() as i128 + SntpTimestamp::UNIX_EPOCH as i128;
         let subsec_nanos = ((datetime.timestamp_subsec_nanos() as u128) << 32) / 1_000_000_000;
+
+        SntpTimestamp(((seconds as u128) << 32) + subsec_nanos)
+    }
+
+    #[cfg(feature = "time")]
+    pub fn from_datetime(datetime: OffsetDateTime) -> SntpTimestamp {
+        let seconds = datetime.unix_timestamp() as i128 + SntpTimestamp::UNIX_EPOCH as i128;
+        let subsec_nanos = ((datetime.nanosecond() as u128) << 32) / 1_000_000_000;
 
         SntpTimestamp(((seconds as u128) << 32) + subsec_nanos)
     }
@@ -47,6 +59,7 @@ impl SntpTimestamp {
         timestamp.to_be_bytes()
     }
 
+    #[cfg(feature = "chrono")]
     pub fn to_datetime(self) -> DateTime<Utc> {
         let secs = (self.0 >> 32) as i64 - (SntpTimestamp::UNIX_EPOCH as i64);
         let nsecs: u32 = (((self.0 & 0xffff_ffff) * 1_000_000_000) >> 32)
@@ -54,6 +67,15 @@ impl SntpTimestamp {
             .unwrap();
 
         Utc.timestamp(secs, nsecs)
+    }
+
+    #[cfg(feature = "time")]
+    pub fn to_datetime(self) -> OffsetDateTime {
+        let secs = (self.0 >> 32) as i64 - (SntpTimestamp::UNIX_EPOCH as i64);
+        let nsecs = (((self.0 & 0xffff_ffff) * 1_000_000_000) >> 32)
+            .try_into()
+            .unwrap();
+        OffsetDateTime::from_unix_timestamp(secs).unwrap() + Duration::nanoseconds(nsecs)
     }
 }
 
@@ -279,6 +301,7 @@ mod tests {
         assert_eq!(SntpTimestamp::from_bytes(after_2036).to_bytes(), after_2036);
     }
 
+    #[cfg(feature = "chrono")]
     #[test]
     fn timestamp_to_datetime_works_correctly() {
         let before_1970 =
@@ -307,6 +330,50 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "time")]
+    #[test]
+    fn timestamp_to_datetime_works_correctly() {
+        use time::{Date, Month};
+
+        let before_1970 =
+            SntpTimestamp::from_bytes([0x82, 0x89, 0x9d, 0xf6, 0x14, 0xf2, 0x58, 0x1a])
+                .to_datetime();
+        let before_2036 =
+            SntpTimestamp::from_bytes([0xc5, 0x02, 0x03, 0x4c, 0x36, 0xbb, 0xa9, 0x8e])
+                .to_datetime();
+        let after_2036 =
+            SntpTimestamp::from_bytes([0x08, 0x1D, 0xD1, 0x80, 0x80, 0x00, 0x00, 0x00])
+                .to_datetime();
+
+        assert_eq!(
+            before_1970,
+            Date::from_calendar_date(1969, Month::May, 26)
+                .unwrap()
+                .with_hms_nano(21, 9, 10, 81_822_878)
+                .unwrap()
+                .assume_utc()
+        );
+
+        assert_eq!(
+            before_2036,
+            Date::from_calendar_date(2004, Month::September, 27)
+                .unwrap()
+                .with_hms_nano(3, 11, 8, 213_800_999)
+                .unwrap()
+                .assume_utc()
+        );
+
+        assert_eq!(
+            after_2036,
+            Date::from_calendar_date(2040, Month::June, 1)
+                .unwrap()
+                .with_hms_nano(8, 0, 0, 500_000_000)
+                .unwrap()
+                .assume_utc()
+        );
+    }
+
+    #[cfg(feature = "chrono")]
     #[test]
     fn timestamp_from_datetime_works_correctly() {
         let before_1970 =
@@ -315,6 +382,48 @@ mod tests {
             SntpTimestamp::from_datetime(Utc.ymd(2004, 9, 27).and_hms_nano(3, 11, 8, 213_800_999));
         let after_2036 =
             SntpTimestamp::from_datetime(Utc.ymd(2040, 6, 1).and_hms_nano(8, 0, 0, 500_000_000));
+
+        assert_eq!(
+            before_1970.to_bytes(),
+            [0x82, 0x89, 0x9d, 0xf6, 0x14, 0xf2, 0x58, 0x19]
+        );
+
+        assert_eq!(
+            before_2036.to_bytes(),
+            [0xc5, 0x02, 0x03, 0x4c, 0x36, 0xbb, 0xa9, 0x8a]
+        );
+
+        assert_eq!(
+            after_2036.to_bytes(),
+            [0x08, 0x1D, 0xD1, 0x80, 0x80, 0x00, 0x00, 0x00]
+        );
+    }
+
+    #[cfg(feature = "time")]
+    #[test]
+    fn timestamp_from_datetime_works_correctly() {
+        use time::{Date, Month};
+        let before_1970 = SntpTimestamp::from_datetime(
+            Date::from_calendar_date(1969, Month::May, 26)
+                .unwrap()
+                .with_hms_nano(21, 9, 10, 81_822_878)
+                .unwrap()
+                .assume_utc(),
+        );
+        let before_2036 = SntpTimestamp::from_datetime(
+            Date::from_calendar_date(2004, Month::September, 27)
+                .unwrap()
+                .with_hms_nano(3, 11, 8, 213_800_999)
+                .unwrap()
+                .assume_utc(),
+        );
+        let after_2036 = SntpTimestamp::from_datetime(
+            Date::from_calendar_date(2040, Month::June, 1)
+                .unwrap()
+                .with_hms_nano(8, 0, 0, 500_000_000)
+                .unwrap()
+                .assume_utc(),
+        );
 
         assert_eq!(
             before_1970.to_bytes(),
