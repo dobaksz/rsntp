@@ -154,7 +154,7 @@ impl Display for ProtocolError {
                 write!(f, "Server reply contains invalid reference identifier")
             }
             ProtocolError::KissODeath(code) => {
-                write!(f, "Kiss-o'-Death packet received: {}", code.to_string())
+                write!(f, "Kiss-o'-Death packet received: {}", code)
             }
         }
     }
@@ -184,10 +184,10 @@ impl Display for SynchroniztationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SynchroniztationError::IOError(io_error) => {
-                write!(f, "Input/output error: {}", io_error.to_string())
+                write!(f, "Input/output error: {}", io_error)
             }
             SynchroniztationError::ProtocolError(protocol_error) => {
-                write!(f, "Protocol error: {}", protocol_error.to_string())
+                write!(f, "Protocol error: {}", protocol_error)
             }
         }
     }
