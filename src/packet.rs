@@ -1,8 +1,9 @@
 use crate::error::ProtocolError;
-use chrono::{DateTime, TimeZone, Utc};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, SocketAddr};
+use std::ops::Sub;
+use std::time::SystemTime;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SntpTimestamp(u128);
@@ -12,6 +13,15 @@ impl SntpTimestamp {
 
     pub fn zero() -> SntpTimestamp {
         SntpTimestamp(0)
+    }
+
+    pub fn from_systemtime(system_time: SystemTime) -> SntpTimestamp {
+        let duration_since_unix_epoch = system_time.duration_since(SystemTime::UNIX_EPOCH).unwrap();
+        let seconds = duration_since_unix_epoch.as_secs() as u128 + SntpTimestamp::UNIX_EPOCH;
+        let subsec_nanos =
+            ((duration_since_unix_epoch.subsec_nanos() as u128) << 32) / 1_000_000_000;
+
+        SntpTimestamp((seconds << 32) + subsec_nanos)
     }
 
     pub fn is_zero(&self) -> bool {
@@ -28,13 +38,6 @@ impl SntpTimestamp {
         }
     }
 
-    pub fn from_datetime<T: TimeZone>(datetime: DateTime<T>) -> SntpTimestamp {
-        let seconds = datetime.timestamp() as i128 + SntpTimestamp::UNIX_EPOCH as i128;
-        let subsec_nanos = ((datetime.timestamp_subsec_nanos() as u128) << 32) / 1_000_000_000;
-
-        SntpTimestamp(((seconds as u128) << 32) + subsec_nanos)
-    }
-
     fn to_bytes(self) -> [u8; 8] {
         assert!(self.0 < 0x0002_0000_0000_0000_0000);
 
@@ -46,14 +49,17 @@ impl SntpTimestamp {
 
         timestamp.to_be_bytes()
     }
+}
 
-    pub fn to_datetime(self) -> DateTime<Utc> {
-        let secs = (self.0 >> 32) as i64 - (SntpTimestamp::UNIX_EPOCH as i64);
-        let nsecs: u32 = (((self.0 & 0xffff_ffff) * 1_000_000_000) >> 32)
-            .try_into()
-            .unwrap();
+impl Sub<SntpTimestamp> for SntpTimestamp {
+    type Output = f64;
 
-        Utc.timestamp(secs, nsecs)
+    fn sub(self, rhs: SntpTimestamp) -> Self::Output {
+        if self.0 >= rhs.0 {
+            (self.0 - rhs.0) as f64 / 4294967296.0
+        } else {
+            (rhs.0 - self.0) as f64 / -4294967296.0
+        }
     }
 }
 
@@ -253,6 +259,7 @@ impl Packet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn zero_timestamp_converts_to_zero_raw() {
@@ -280,45 +287,14 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_to_datetime_works_correctly() {
-        let before_1970 =
-            SntpTimestamp::from_bytes([0x82, 0x89, 0x9d, 0xf6, 0x14, 0xf2, 0x58, 0x1a])
-                .to_datetime();
-        let before_2036 =
-            SntpTimestamp::from_bytes([0xc5, 0x02, 0x03, 0x4c, 0x36, 0xbb, 0xa9, 0x8e])
-                .to_datetime();
-        let after_2036 =
-            SntpTimestamp::from_bytes([0x08, 0x1D, 0xD1, 0x80, 0x80, 0x00, 0x00, 0x00])
-                .to_datetime();
-
-        assert_eq!(
-            before_1970,
-            Utc.ymd(1969, 5, 26).and_hms_nano(21, 9, 10, 81_822_878)
+    fn timestamp_from_systemtime_works_correctly() {
+        // 2004-09-27, 03:11:08
+        let before_2036 = SntpTimestamp::from_systemtime(
+            SystemTime::UNIX_EPOCH + Duration::new(1096254668, 213_800_999),
         );
-
-        assert_eq!(
-            before_2036,
-            Utc.ymd(2004, 9, 27).and_hms_nano(3, 11, 8, 213_800_999)
-        );
-
-        assert_eq!(
-            after_2036,
-            Utc.ymd(2040, 6, 1).and_hms_nano(8, 0, 0, 500_000_000)
-        );
-    }
-
-    #[test]
-    fn timestamp_from_datetime_works_correctly() {
-        let before_1970 =
-            SntpTimestamp::from_datetime(Utc.ymd(1969, 5, 26).and_hms_nano(21, 9, 10, 81_822_878));
-        let before_2036 =
-            SntpTimestamp::from_datetime(Utc.ymd(2004, 9, 27).and_hms_nano(3, 11, 8, 213_800_999));
-        let after_2036 =
-            SntpTimestamp::from_datetime(Utc.ymd(2040, 6, 1).and_hms_nano(8, 0, 0, 500_000_000));
-
-        assert_eq!(
-            before_1970.to_bytes(),
-            [0x82, 0x89, 0x9d, 0xf6, 0x14, 0xf2, 0x58, 0x19]
+        // 2040:06-01 08:00:00
+        let after_2036 = SntpTimestamp::from_systemtime(
+            SystemTime::UNIX_EPOCH + Duration::new(2222150400, 500_000_000),
         );
 
         assert_eq!(
@@ -330,6 +306,23 @@ mod tests {
             after_2036.to_bytes(),
             [0x08, 0x1D, 0xD1, 0x80, 0x80, 0x00, 0x00, 0x00]
         );
+    }
+
+    #[test]
+    fn subtracting_timestamps_works_correctly() {
+        let now = SystemTime::now();
+        let past = now - Duration::from_secs(3600);
+        let future = now + Duration::from_secs(3600);
+
+        let now_sntp = SntpTimestamp::from_systemtime(now);
+        let past_sntp = SntpTimestamp::from_systemtime(past);
+        let future_sntp = SntpTimestamp::from_systemtime(future);
+
+        assert_eq!(future_sntp - now_sntp, 3600.0);
+        assert_eq!(future_sntp - past_sntp, 7200.0);
+
+        assert_eq!(now_sntp - future_sntp, -3600.0);
+        assert_eq!(past_sntp - future_sntp, -7200.0);
     }
 
     #[test]

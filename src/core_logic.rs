@@ -1,6 +1,7 @@
 use crate::error::{KissCode, ProtocolError, SynchroniztationError};
 use crate::packet::{LeapIndicator, Mode, Packet, ReferenceIdentifier, SntpTimestamp};
 use chrono::{DateTime, Duration, Utc};
+use std::time::SystemTime;
 
 /// Results of a synchronization.
 ///
@@ -9,8 +10,8 @@ use chrono::{DateTime, Duration, Utc};
 /// knwoledge about  SNTP protocol internals.
 #[derive(Debug, Clone)]
 pub struct SynchronizationResult {
-    clock_offset: Duration,
-    round_trip_delay: Duration,
+    clock_offset_s: f64,
+    round_trip_delay_s: f64,
     reference_identifier: ReferenceIdentifier,
     leap_indicator: LeapIndicator,
     stratum: u8,
@@ -34,7 +35,7 @@ impl SynchronizationResult {
     /// println!("Local time: {}", Local::now() + result.clock_offset());
     /// ```
     pub fn clock_offset(&self) -> Duration {
-        self.clock_offset
+        Self::secs_f64_to_duration(self.clock_offset_s)
     }
 
     /// Returns with the round trip delay
@@ -55,7 +56,7 @@ impl SynchronizationResult {
     /// println!("RTT: {} ms", result.round_trip_delay().num_milliseconds());
     /// ```
     pub fn round_trip_delay(&self) -> Duration {
-        self.round_trip_delay
+        Self::secs_f64_to_duration(self.round_trip_delay_s)
     }
 
     /// Returns with the server reference identifier.
@@ -97,7 +98,7 @@ impl SynchronizationResult {
     /// let local_time: DateTime<Local> = DateTime::from(result.datetime());
     /// ```
     pub fn datetime(&self) -> DateTime<Utc> {
-        Utc::now() + self.clock_offset
+        Utc::now() + self.clock_offset()
     }
 
     /// Returns with the leap indicator
@@ -151,6 +152,18 @@ impl SynchronizationResult {
     pub fn stratum(&self) -> u8 {
         self.stratum
     }
+
+    fn secs_f64_to_duration(secs: f64) -> Duration {
+        const NANOS_PER_SEC: u128 = 1_000_000_000;
+
+        let sign = secs.signum() as i64;
+        let nanos = (secs.abs() * (NANOS_PER_SEC as f64)) as u128;
+
+        let duration_sec = Duration::seconds((nanos / NANOS_PER_SEC) as i64 * sign);
+        let duration_nanos = Duration::nanoseconds((nanos % NANOS_PER_SEC) as i64 * sign);
+
+        duration_sec + duration_nanos
+    }
 }
 
 pub struct Request {
@@ -159,6 +172,10 @@ pub struct Request {
 
 impl Request {
     pub fn new() -> Request {
+        Self::new_with_transmit_time(SystemTime::now())
+    }
+
+    pub fn new_with_transmit_time(transmit_time: SystemTime) -> Request {
         Request {
             packet: Packet {
                 li: LeapIndicator::NoWarning,
@@ -168,7 +185,7 @@ impl Request {
                 reference_timestamp: SntpTimestamp::zero(),
                 originate_timestamp: SntpTimestamp::zero(),
                 receive_timestamp: SntpTimestamp::zero(),
-                transmit_timestamp: SntpTimestamp::from_datetime(Utc::now()),
+                transmit_timestamp: SntpTimestamp::from_systemtime(transmit_time),
             },
         }
     }
@@ -185,15 +202,19 @@ impl Request {
 pub struct Reply {
     request: Packet,
     reply: Packet,
-    reply_timestamp: DateTime<Utc>,
+    reply_timestamp: SntpTimestamp,
 }
 
 impl Reply {
     pub fn new(request: Request, reply: Packet) -> Reply {
+        Self::new_with_reply_time(request, reply, SystemTime::now())
+    }
+
+    pub fn new_with_reply_time(request: Request, reply: Packet, reply_time: SystemTime) -> Reply {
         Reply {
             request: request.into_packet(),
             reply,
-            reply_timestamp: Utc::now(),
+            reply_timestamp: SntpTimestamp::from_systemtime(reply_time),
         }
     }
 
@@ -221,14 +242,15 @@ impl Reply {
     pub fn process(self) -> Result<SynchronizationResult, SynchroniztationError> {
         self.check()?;
 
-        let originate_ts = self.reply.originate_timestamp.to_datetime();
-        let transmit_ts = self.reply.transmit_timestamp.to_datetime();
-        let receive_ts = self.reply.receive_timestamp.to_datetime();
-        let round_trip_delay = (self.reply_timestamp - originate_ts) - (transmit_ts - receive_ts);
-        let clock_offset = ((receive_ts - originate_ts) + (transmit_ts - self.reply_timestamp)) / 2;
+        let originate_ts = self.reply.originate_timestamp;
+        let transmit_ts = self.reply.transmit_timestamp;
+        let receive_ts = self.reply.receive_timestamp;
+        let round_trip_delay_s = (self.reply_timestamp - originate_ts) - (transmit_ts - receive_ts);
+        let clock_offset_s =
+            ((receive_ts - originate_ts) + (transmit_ts - self.reply_timestamp)) / 2.0;
         Ok(SynchronizationResult {
-            round_trip_delay,
-            clock_offset,
+            round_trip_delay_s,
+            clock_offset_s,
             reference_identifier: self.reply.reference_identifier.clone(),
             leap_indicator: self.reply.li,
             stratum: self.reply.stratum,
@@ -253,24 +275,31 @@ mod tests {
 
     #[test]
     fn basic_synchronization_works() {
-        let request = Request::new();
-
-        std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
-        let now = Utc::now();
-        std::thread::sleep(Duration::milliseconds(100).to_std().unwrap());
+        let now = SystemTime::now();
+        let request = Request::new_with_transmit_time(now);
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
             mode: Mode::Server,
             stratum: 1,
             reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-            reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+            reference_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_secs(86400),
+            ),
             originate_timestamp: request.packet.transmit_timestamp,
-            receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-            transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+            receive_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(400),
+            ),
+            transmit_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(400),
+            ),
         };
 
-        let reply = Reply::new(request, reply_packet);
+        let reply = Reply::new_with_reply_time(
+            request,
+            reply_packet,
+            now + std::time::Duration::from_millis(200),
+        );
 
         let result = reply.process().unwrap();
 
@@ -285,17 +314,23 @@ mod tests {
     #[test]
     fn sync_fails_if_reply_originate_ts_does_not_match_request_transmit_ts() {
         let request = Request::new();
-        let now = Utc::now();
+        let now = SystemTime::now();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
             mode: Mode::Server,
             stratum: 1,
             reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-            reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
-            originate_timestamp: SntpTimestamp::from_datetime(now),
-            receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-            transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+            reference_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_secs(86400),
+            ),
+            originate_timestamp: SntpTimestamp::from_systemtime(now),
+            receive_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
+            transmit_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
         };
 
         let reply = Reply::new(request, reply_packet);
@@ -308,16 +343,20 @@ mod tests {
     #[test]
     fn sync_fails_if_reply_contains_zero_transmit_timestamp() {
         let request = Request::new();
-        let now = Utc::now();
+        let now = SystemTime::now();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
             mode: Mode::Server,
             stratum: 1,
             reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-            reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+            reference_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_secs(86400),
+            ),
             originate_timestamp: request.packet.transmit_timestamp,
-            receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+            receive_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
             transmit_timestamp: SntpTimestamp::zero(),
         };
 
@@ -331,17 +370,23 @@ mod tests {
     #[test]
     fn sync_fails_if_reply_contains_wrong_mode() {
         let request = Request::new();
-        let now = Utc::now();
+        let now = SystemTime::now();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
             mode: Mode::Client,
             stratum: 1,
             reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
-            reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+            reference_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_secs(86400),
+            ),
             originate_timestamp: request.packet.transmit_timestamp,
-            receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-            transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+            receive_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
+            transmit_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
         };
 
         let reply = Reply::new(request, reply_packet);
@@ -354,17 +399,23 @@ mod tests {
     #[test]
     fn sync_fails_if_kiss_o_death_received() {
         let request = Request::new();
-        let now = Utc::now();
+        let now = SystemTime::now();
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
             mode: Mode::Server,
             stratum: 0,
             reference_identifier: ReferenceIdentifier::new_ascii([0x52, 0x41, 0x54, 0x45]).unwrap(),
-            reference_timestamp: SntpTimestamp::from_datetime(now - Duration::days(1)),
+            reference_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_secs(86400),
+            ),
             originate_timestamp: request.packet.transmit_timestamp,
-            receive_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
-            transmit_timestamp: SntpTimestamp::from_datetime(now - Duration::milliseconds(500)),
+            receive_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
+            transmit_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
         };
 
         let reply = Reply::new(request, reply_packet);
