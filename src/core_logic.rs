@@ -35,7 +35,11 @@ impl SynchronizationResult {
     /// println!("Local time: {}", Local::now() + result.clock_offset());
     /// ```
     pub fn clock_offset(&self) -> Duration {
-        Self::secs_f64_to_duration(self.clock_offset_s)
+        chrono::Duration::from_std(std::time::Duration::from_secs_f64(
+            self.clock_offset_s.abs(),
+        ))
+        .unwrap()
+            * self.clock_offset_s.signum() as i32
     }
 
     /// Returns with the round trip delay
@@ -56,7 +60,11 @@ impl SynchronizationResult {
     /// println!("RTT: {} ms", result.round_trip_delay().num_milliseconds());
     /// ```
     pub fn round_trip_delay(&self) -> Duration {
-        Self::secs_f64_to_duration(self.round_trip_delay_s)
+        chrono::Duration::from_std(std::time::Duration::from_secs_f64(
+            self.round_trip_delay_s.abs(),
+        ))
+        .unwrap()
+            * self.round_trip_delay_s.signum() as i32
     }
 
     /// Returns with the server reference identifier.
@@ -151,18 +159,6 @@ impl SynchronizationResult {
     /// ```
     pub fn stratum(&self) -> u8 {
         self.stratum
-    }
-
-    fn secs_f64_to_duration(secs: f64) -> Duration {
-        const NANOS_PER_SEC: u128 = 1_000_000_000;
-
-        let sign = secs.signum() as i64;
-        let nanos = (secs.abs() * (NANOS_PER_SEC as f64)) as u128;
-
-        let duration_sec = Duration::seconds((nanos / NANOS_PER_SEC) as i64 * sign);
-        let duration_nanos = Duration::nanoseconds((nanos % NANOS_PER_SEC) as i64 * sign);
-
-        duration_sec + duration_nanos
     }
 }
 
