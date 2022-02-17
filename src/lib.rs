@@ -27,7 +27,7 @@
 //! let client = SntpClient::new();
 //! let result = client.synchronize("pool.ntp.org").unwrap();
 //!
-//! let local_time: DateTime<Local> = DateTime::from(result.datetime());
+//! let local_time: DateTime<Local> = DateTime::from(result.datetime().as_chrono_datetime_utc());
 //!
 //! println!("Current time is: {}", local_time);
 //! ```
@@ -46,7 +46,7 @@ async fn local_time() -> DateTime<Local> {
   let client = AsyncSntpClient::new();
   let result = client.synchronize("pool.ntp.org").await.unwrap();
   
-  DateTime::from(result.datetime())
+  DateTime::from(result.datetime().as_chrono_datetime_utc())
 }
 ```
 ## Disabling asynchronous API
@@ -77,18 +77,19 @@ rsntp = { version = "2.1.0", default-features = false }
 //!
 //! let result = client.synchronize("2.pool.ntp.org").unwrap();
 //!
-//! let local_time: DateTime<Local> = DateTime::from(result.datetime());
+//! let local_time: DateTime<Local> = DateTime::from(result.datetime().as_chrono_datetime_utc());
 //! ```
 //!
 
 mod core_logic;
 mod error;
 mod packet;
+mod result;
 mod to_server_addrs;
 
-pub use core_logic::SynchronizationResult;
 pub use error::{KissCode, ProtocolError, SynchroniztationError};
 pub use packet::{LeapIndicator, ReferenceIdentifier};
+pub use result::{SntpDateTime, SntpDuration, SynchronizationResult};
 pub use to_server_addrs::ToServerAddrs;
 
 use core_logic::{Reply, Request};
@@ -372,7 +373,6 @@ impl AsyncSntpClient {
     ///
     /// ```no_run
     /// use rsntp::{AsyncSntpClient, SynchronizationResult, SynchroniztationError};
-    /// use chrono::{DateTime, Local};
     ///
     /// async fn local_time() -> Result<SynchronizationResult, SynchroniztationError> {
     ///   let client = AsyncSntpClient::new();

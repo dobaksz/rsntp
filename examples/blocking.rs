@@ -4,13 +4,22 @@ fn main() {
 
     println!(
         "Clock offset: {} ms",
-        time_info.clock_offset().num_milliseconds()
+        time_info
+            .clock_offset()
+            .as_chrono_duration()
+            .num_milliseconds()
     );
     println!(
         "Round trip delay: {} ms",
-        time_info.round_trip_delay().num_milliseconds()
+        time_info
+            .round_trip_delay()
+            .as_chrono_duration()
+            .num_milliseconds()
     );
-    println!("Server timestamp: {}", time_info.datetime().to_string());
+    println!(
+        "Server timestamp: {}",
+        time_info.datetime().as_chrono_datetime_utc().to_string()
+    );
 
     println!(
         "Reference identifier: {}",
