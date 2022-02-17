@@ -1,4 +1,5 @@
-fn main() {
+#[cfg(feature = "chrono")]
+fn chrono_example() {
     let client = rsntp::SntpClient::new();
     let time_info = client.synchronize("pool.ntp.org").unwrap();
 
@@ -26,4 +27,9 @@ fn main() {
         time_info.reference_identifier().to_string()
     );
     println!("Stratum: {}", time_info.stratum());
+}
+
+fn main() {
+    #[cfg(feature = "chrono")]
+    chrono_example();
 }

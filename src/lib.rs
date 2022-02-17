@@ -6,7 +6,7 @@
 //! `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
 //!
 //! * Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
-//! * Time and date handling based on the `chrono` crate
+//! * Time and date handling based on the `chrono` crate (can be disabled)
 //! * IPv6 support
 //!
 //! ## Usage
@@ -18,6 +18,10 @@
 //! rsntp = "2.1.0"
 //! ```
 //!
+#![cfg_attr(
+    feature = "async",
+    doc = r##"
+
 //! Obtain the current local time with the blocking API:
 //!
 //! ```no_run
@@ -32,8 +36,10 @@
 //! println!("Current time is: {}", local_time);
 //! ```
 //!
+//! "##
+)]
 #![cfg_attr(
-    feature = "async",
+    all(feature = "async", feature = "chrono"),
     doc = r##"
 
 A function which uses the asynchronous API to obtain local time:
@@ -68,7 +74,6 @@ rsntp = { version = "2.1.0", default-features = false }
 //! To use IPv6, you need to set an IPv6 bind address:
 //!
 //! ```no_run
-//! use chrono::{DateTime, Local};
 //! use rsntp::{Config, SntpClient};
 //! use std::net::Ipv6Addr;
 //!
@@ -77,7 +82,7 @@ rsntp = { version = "2.1.0", default-features = false }
 //!
 //! let result = client.synchronize("2.pool.ntp.org").unwrap();
 //!
-//! let local_time: DateTime<Local> = DateTime::from(result.datetime().as_chrono_datetime_utc());
+//! let unix_timestamp_utc = result.datetime().unix_timestamp();
 //! ```
 //!
 

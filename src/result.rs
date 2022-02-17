@@ -1,4 +1,5 @@
 use crate::packet::{LeapIndicator, ReferenceIdentifier};
+use std::time::SystemTime;
 
 /// Represents a signed duration value.
 ///
@@ -83,6 +84,7 @@ impl SntpDuration {
     ///
     /// let clock_offset: chrono::Duration = result.clock_offset().as_chrono_duration();
     /// ```
+    #[cfg(feature = "chrono")]
     pub fn as_chrono_duration(&self) -> chrono::Duration {
         chrono::Duration::from_std(self.abs_as_std_duration()).unwrap() * self.signum()
     }
@@ -94,8 +96,8 @@ impl SntpDuration {
 /// It is not intended to be used directly, but should be converted to a different duration
 /// representation, depending on the enabled time crate support.
 ///
-/// If chrono support is enabled (which is the default), then it can be converted to
-/// [`chrono::DateTime<Utc>´] with [`Self::as_chrono_datetime_utc`]
+/// If chrono support is enabled then it can be converted to [`chrono::DateTime<Utc>´]
+/// with [`Self::as_chrono_datetime_utc`]
 #[derive(Debug, Clone, Copy)]
 pub struct SntpDateTime {
     offset: SntpDuration,
@@ -104,6 +106,28 @@ pub struct SntpDateTime {
 impl SntpDateTime {
     pub(crate) fn new(offset: SntpDuration) -> SntpDateTime {
         SntpDateTime { offset }
+    }
+
+    /// Returns with the duration since Unix epoch i.e. Unix timestamp
+    ///
+    /// ```no_run
+    /// use rsntp::SntpClient;
+    ///
+    /// let client = SntpClient::new();
+    /// let result = client.synchronize("pool.ntp.org").unwrap();
+    ///
+    /// let unix_timetamp_utc = result.datetime().unix_timestamp();
+    /// ```
+    pub fn unix_timestamp(&self) -> std::time::Duration {
+        let now = SystemTime::now();
+
+        let corrected = if self.offset.signum() >= 0 {
+            now + self.offset.abs_as_std_duration()
+        } else {
+            now - self.offset.abs_as_std_duration()
+        };
+
+        corrected.duration_since(SystemTime::UNIX_EPOCH).unwrap()
     }
 
     /// Converts the date and time to [`chrono::DateTime<Utc>`]
@@ -120,6 +144,7 @@ impl SntpDateTime {
     ///
     /// let local_time: DateTime<Local> = DateTime::from(result.datetime().as_chrono_datetime_utc());
     /// ```
+    #[cfg(feature = "chrono")]
     pub fn as_chrono_datetime_utc(&self) -> chrono::DateTime<chrono::Utc> {
         chrono::Utc::now() + self.offset.as_chrono_duration()
     }
@@ -165,12 +190,11 @@ impl SynchronizationResult {
     /// Print the synchronized local time using clock offset:
     /// ```no_run
     /// use rsntp::SntpClient;
-    /// use chrono::Local;
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
     ///
-    /// println!("Local time: {}", Local::now() + result.clock_offset().as_chrono_duration());
+    /// println!("Clock offset: {}", result.clock_offset().as_secs_f64());
     /// ```
     pub fn clock_offset(&self) -> SntpDuration {
         SntpDuration::from_secs_f64(self.clock_offset_s)
@@ -186,12 +210,11 @@ impl SynchronizationResult {
     ///
     /// ```no_run
     /// use rsntp::SntpClient;
-    /// use chrono::Local;
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
     ///
-    /// println!("RTT: {} ms", result.round_trip_delay().as_chrono_duration().num_milliseconds());
+    /// println!("RTT: {} ms", result.round_trip_delay().as_secs_f64() * 1000.0);
     /// ```
     pub fn round_trip_delay(&self) -> SntpDuration {
         SntpDuration::from_secs_f64(self.round_trip_delay_s)
@@ -207,7 +230,6 @@ impl SynchronizationResult {
     ///
     /// ```no_run
     /// use rsntp::SntpClient;
-    /// use chrono::Local;
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
@@ -228,12 +250,11 @@ impl SynchronizationResult {
     /// Calcuating synchronized local time:
     /// ```no_run
     /// use rsntp::SntpClient;
-    /// use chrono::{DateTime, Local};
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
     ///
-    /// let local_time: DateTime<Local> = DateTime::from(result.datetime().as_chrono_datetime_utc());
+    /// let unix_timetamp_utc = result.datetime().unix_timestamp();
     /// ```
     pub fn datetime(&self) -> SntpDateTime {
         SntpDateTime::new(self.clock_offset())
@@ -253,7 +274,6 @@ impl SynchronizationResult {
     ///
     /// ```no_run
     /// use rsntp::SntpClient;
-    /// use chrono::{DateTime, Local};
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
@@ -280,7 +300,6 @@ impl SynchronizationResult {
     ///
     /// ```no_run
     /// use rsntp::SntpClient;
-    /// use chrono::{DateTime, Local};
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
@@ -323,6 +342,7 @@ mod tests {
         assert_eq!(negative_duration.signum(), -1);
     }
 
+    #[cfg(feature = "chrono")]
     #[test]
     fn sntp_duration_converting_to_chrono_duration_works() {
         let positive_duration = SntpDuration::from_secs_f64(3600.0);
@@ -338,6 +358,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "chrono")]
     #[test]
     fn sntp_date_time_converting_to_chrono_datetime_works() {
         let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(0.1));
