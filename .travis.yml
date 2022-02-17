@@ -14,8 +14,8 @@ env:
   matrix:
     - RSNTP_FEATURE_FLAGS=""
     - RSNTP_FEATURE_FLAGS="--no-default-features"
-    - RSNTP_FEATURE_FLAGS="--no-default-features --features \"async\""
-    - RSNTP_FEATURE_FLAGS="--no-default-features --features \"chrono\""
+    - RSNTP_FEATURE_FLAGS="--no-default-features --features async"
+    - RSNTP_FEATURE_FLAGS="--no-default-features --features chrono"
 
 
 script:
