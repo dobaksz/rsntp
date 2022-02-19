@@ -387,4 +387,14 @@ mod tests {
         assert!(diff.num_milliseconds() > 90);
         assert!(diff.num_milliseconds() < 110);
     }
+
+    // TODO: converting to chono::Duration does not really fails but runs into
+    //    #[cfg(feature = "chrono")]
+    //    #[test]
+    //    fn sntp_date_time_converting_to_chrono_datetime_fails_for_nan() {
+    //        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(f64::NAN));
+    //        let converted: Result<chrono::DateTime<chrono::Utc>, ConversionError> = datetime.try_into();
+    //
+    //        assert!(converted.is_err());
+    //    }
 }
