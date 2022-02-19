@@ -204,3 +204,22 @@ impl From<ProtocolError> for SynchroniztationError {
         SynchroniztationError::ProtocolError(protocol_error)
     }
 }
+
+/// Reresents an error which occured during internal timestamp conversion
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ConversionError {
+    /// An artimetic over/underflow
+    Overflow,
+}
+
+impl Error for ConversionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+impl Display for ConversionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Overflow during timestamp conversion")
+    }
+}

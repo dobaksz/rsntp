@@ -12,7 +12,7 @@ fn main() {
   );
   println!(
     "Server UTC UNIX timestamp: {}",
-    time_info.datetime().unix_timestamp().as_secs()
+    time_info.datetime().unix_timestamp().unwrap().as_secs()
   );
 
   println!(

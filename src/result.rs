@@ -1,17 +1,19 @@
+use crate::error::ConversionError;
 use crate::packet::{LeapIndicator, ReferenceIdentifier};
+#[cfg(feature = "chrono")]
+use std::convert::TryInto;
 use std::time::SystemTime;
 
 /// Represents a signed duration value.
 ///
 /// It's main purpose is to store signed duration values which the [`std::time::Duration`] is not
-/// capable of. It can be converted to a different duration representation, depending on the
+/// capable of, while making it possible to return a time-crate independent duration values
+/// (i.e. it works without crono support enabled).
+///
+/// It can be converted to a different duration representation, depending on the
 /// enabled time crate support or it has some methods to inspect its value directly.
 ///
-/// If you want to use it directly then you can use [`as_secs_f64`], [`abs_as_std_duration`]
-/// and [`signum`] methods.
-///
-/// If chrono support is enabled then you can convert it to [`chrono::Duration`]
-/// with [`Self::as_chrono_duration`].
+/// If chrono support is enabled then it will have [`TryInto<chrono::Duration>`] implemented.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct SntpDuration(f64);
 
@@ -23,20 +25,22 @@ impl SntpDuration {
     /// Returns with the absolute value of the duration
     ///
     /// As [`std::time::Duration`] cannot store signed values, the returned duration will always be
-    /// positive and will store the absolute value.
+    /// positive and will store the absolute value. This is a fallible conversion as there can be cases
+    /// when duration contains a non-convertible number.
     ///
     /// ```no_run
     /// use rsntp::SntpClient;
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
-    /// let clock_offset_abs = result.clock_offset().abs_as_std_duration().as_secs_f64();
+    /// let clock_offset_abs = result.clock_offset().abs_as_std_duration().unwrap().as_secs_f64();
     /// let clock_offset = clock_offset_abs * result.clock_offset().signum() as f64;
     ///
     /// println!("Clock offset: {} seconds", clock_offset);
     /// ```
-    pub fn abs_as_std_duration(&self) -> std::time::Duration {
-        std::time::Duration::from_secs_f64(self.0.abs())
+    pub fn abs_as_std_duration(&self) -> Result<std::time::Duration, ConversionError> {
+        // TODO: make this fallible when std::time::Duration::try_from_secs_f64 is stabilized
+        Ok(std::time::Duration::from_secs_f64(self.0.abs()))
     }
 
     /// Returns with the sign of the duration
@@ -49,7 +53,7 @@ impl SntpDuration {
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
-    /// let clock_offset_abs = result.clock_offset().abs_as_std_duration().as_secs_f64();
+    /// let clock_offset_abs = result.clock_offset().abs_as_std_duration().unwrap().as_secs_f64();
     /// let clock_offset = clock_offset_abs * result.clock_offset().signum() as f64;
     ///
     /// println!("Clock offset: {} seconds", clock_offset);
@@ -59,6 +63,9 @@ impl SntpDuration {
     }
 
     /// Returns with the number of seconds in this duration as a floating point number
+    ///
+    /// The returned value will have a proper sign, i.e. it will be negative if the
+    /// stored duration is negative.
     ///
     /// ```no_run
     /// use rsntp::SntpClient;
@@ -71,33 +78,30 @@ impl SntpDuration {
     pub fn as_secs_f64(&self) -> f64 {
         self.0
     }
+}
 
-    /// Converts the duration to [`chrono::Duration`]
-    ///
-    /// Only available when chrono crate support is enabled
-    ///
-    /// ```no_run
-    /// use rsntp::SntpClient;
-    ///
-    /// let client = SntpClient::new();
-    /// let result = client.synchronize("pool.ntp.org").unwrap();
-    ///
-    /// let clock_offset: chrono::Duration = result.clock_offset().as_chrono_duration();
-    /// ```
-    #[cfg(feature = "chrono")]
-    pub fn as_chrono_duration(&self) -> chrono::Duration {
-        chrono::Duration::from_std(self.abs_as_std_duration()).unwrap() * self.signum()
+#[cfg(feature = "chrono")]
+impl TryInto<chrono::Duration> for SntpDuration {
+    type Error = ConversionError;
+
+    fn try_into(self) -> Result<chrono::Duration, ConversionError> {
+        let abs = chrono::Duration::from_std(self.abs_as_std_duration()?)
+            .map_err(|_| ConversionError::Overflow)?;
+
+        Ok(abs * self.signum())
     }
 }
 
 /// Represents a date and time
 ///
-/// It's main purpose is to have an indenedent wrapper for different date and time representations.
-/// It is not intended to be used directly, but should be converted to a different duration
-/// representation, depending on the enabled time crate support.
+/// It's main purpose is to have a wrapper for different date and time representations, which
+/// is usable regadless of the enabled time crate support.
 ///
-/// If chrono support is enabled then it can be converted to [`chrono::DateTime<Utc>´]
-/// with [`Self::as_chrono_datetime_utc`]
+/// It can be inspected directly, but there is no built-in timezone conversion so it will
+/// always return with UTC timestamps. If you need timezone support then you have to use
+/// external time crate like chrono.
+///
+/// If chrono support is enabled then it will have [`TryInto<chrono::DateTime<Utc>>´] implemented.
 #[derive(Debug, Clone, Copy)]
 pub struct SntpDateTime {
     offset: SntpDuration,
@@ -110,43 +114,50 @@ impl SntpDateTime {
 
     /// Returns with the duration since Unix epoch i.e. Unix timestamp
     ///
+    /// Then conversion can fail in cases like internal overflow or when
+    /// the date is not representable with unit timestamp (like it is
+    /// before Unix epoch).
+    ///
+    /// Note that the function uses the actual system time during execution
+    /// so assumes that it is monotonic. If the time has been changed
+    /// between the actual synchronization and the call of this function
+    /// then it may return with undefined results.
+    ///
     /// ```no_run
     /// use rsntp::SntpClient;
     ///
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
     ///
-    /// let unix_timetamp_utc = result.datetime().unix_timestamp();
+    /// let unix_timetamp_utc = result.datetime().unix_timestamp().unwrap();
     /// ```
-    pub fn unix_timestamp(&self) -> std::time::Duration {
+    pub fn unix_timestamp(&self) -> Result<std::time::Duration, ConversionError> {
         let now = SystemTime::now();
 
         let corrected = if self.offset.signum() >= 0 {
-            now + self.offset.abs_as_std_duration()
+            now.checked_add(self.offset.abs_as_std_duration()?)
+                .ok_or(ConversionError::Overflow)?
         } else {
-            now - self.offset.abs_as_std_duration()
+            now.checked_sub(self.offset.abs_as_std_duration()?)
+                .ok_or(ConversionError::Overflow)?
         };
 
-        corrected.duration_since(SystemTime::UNIX_EPOCH).unwrap()
+        corrected
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|_| ConversionError::Overflow)
     }
+}
 
-    /// Converts the date and time to [`chrono::DateTime<Utc>`]
-    ///
-    /// Only available when chrono crate support is enabled
-    ///
-    /// Calcuating synchronized local time:
-    /// ```no_run
-    /// use rsntp::SntpClient;
-    /// use chrono::{DateTime, Local};
-    ///
-    /// let client = SntpClient::new();
-    /// let result = client.synchronize("pool.ntp.org").unwrap();
-    ///
-    /// let local_time: DateTime<Local> = DateTime::from(result.datetime().as_chrono_datetime_utc());
-    /// ```
-    #[cfg(feature = "chrono")]
-    pub fn as_chrono_datetime_utc(&self) -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc::now() + self.offset.as_chrono_duration()
+#[cfg(feature = "chrono")]
+impl TryInto<chrono::DateTime<chrono::Utc>> for SntpDateTime {
+    type Error = ConversionError;
+
+    fn try_into(self) -> Result<chrono::DateTime<chrono::Utc>, ConversionError> {
+        let chrono_offset: chrono::Duration = self.offset.try_into()?;
+
+        chrono::Utc::now()
+            .checked_add_signed(chrono_offset)
+            .ok_or(ConversionError::Overflow)
     }
 }
 
@@ -254,7 +265,7 @@ impl SynchronizationResult {
     /// let client = SntpClient::new();
     /// let result = client.synchronize("pool.ntp.org").unwrap();
     ///
-    /// let unix_timetamp_utc = result.datetime().unix_timestamp();
+    /// let unix_timetamp_utc = result.datetime().unix_timestamp().unwrap();
     /// ```
     pub fn datetime(&self) -> SntpDateTime {
         SntpDateTime::new(self.clock_offset())
@@ -330,11 +341,11 @@ mod tests {
         let negative_duration = SntpDuration::from_secs_f64(-3600.0);
 
         assert_eq!(
-            positive_duration.abs_as_std_duration(),
+            positive_duration.abs_as_std_duration().unwrap(),
             std::time::Duration::from_secs(3600)
         );
         assert_eq!(
-            negative_duration.abs_as_std_duration(),
+            negative_duration.abs_as_std_duration().unwrap(),
             std::time::Duration::from_secs(3600)
         );
 
@@ -348,21 +359,29 @@ mod tests {
         let positive_duration = SntpDuration::from_secs_f64(3600.0);
         let negative_duration = SntpDuration::from_secs_f64(-3600.0);
 
-        assert_eq!(
-            positive_duration.as_chrono_duration(),
-            chrono::Duration::hours(1)
-        );
-        assert_eq!(
-            negative_duration.as_chrono_duration(),
-            chrono::Duration::hours(-1)
-        );
+        let positive_chrono: chrono::Duration = positive_duration.try_into().unwrap();
+        let negative_chrono: chrono::Duration = negative_duration.try_into().unwrap();
+
+        assert_eq!(positive_chrono, chrono::Duration::hours(1));
+        assert_eq!(negative_chrono, chrono::Duration::hours(-1));
     }
+
+    // TODO: converting to chono::Duration does not really fails but runs into
+    // a panic in the time crate. Seems like a bug.
+    //    #[cfg(feature = "chrono")]
+    //    #[test]
+    //    fn sntp_duration_converting_to_chrono_duration_fails() {
+    //        let nan_duration_result: Result<chrono::Duration, ConversionError> =
+    //           SntpDuration::from_secs_f64(f64::NAN).try_into();
+    //
+    //        assert!(nan_duration_result.is_err());
+    //    }
 
     #[cfg(feature = "chrono")]
     #[test]
     fn sntp_date_time_converting_to_chrono_datetime_works() {
         let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(0.1));
-        let converted = datetime.as_chrono_datetime_utc();
+        let converted: chrono::DateTime<chrono::Utc> = datetime.try_into().unwrap();
         let diff = converted - chrono::Utc::now();
 
         assert!(diff.num_milliseconds() > 90);

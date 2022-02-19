@@ -46,13 +46,14 @@ A function which uses the asynchronous API to obtain local time:
 
 ```no_run
 use rsntp::AsyncSntpClient;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Utc};
 
 async fn local_time() -> DateTime<Local> {
   let client = AsyncSntpClient::new();
   let result = client.synchronize("pool.ntp.org").await.unwrap();
+  let utc_time: DateTime<Utc> = result.datetime().try_into().unwrap();
   
-  DateTime::from(result.datetime().as_chrono_datetime_utc())
+  DateTime::from(utc_time)
 }
 ```
 ## Disabling asynchronous API
