@@ -1,6 +1,6 @@
 use crate::error::ConversionError;
 use crate::packet::{LeapIndicator, ReferenceIdentifier};
-#[cfg(feature = "chrono")]
+#[cfg(all(feature = "chrono", feature = "time"))]
 use std::convert::TryInto;
 use std::time::SystemTime;
 
@@ -13,7 +13,8 @@ use std::time::SystemTime;
 /// It can be converted to a different duration representation, depending on the
 /// enabled time crate support or it has some methods to inspect its value directly.
 ///
-/// If chrono support is enabled then it will have [`TryInto<chrono::Duration>`] implemented.
+/// If `chrono` crate support is enabled then it will have [`TryInto<chrono::Duration>`] implemented.
+/// If `time` crate support is enabled then it will have [`TryInto<time::Duration>`] implemented.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct SntpDuration(f64);
 
@@ -92,6 +93,17 @@ impl TryInto<chrono::Duration> for SntpDuration {
     }
 }
 
+#[cfg(feature = "time")]
+impl TryInto<time::Duration> for SntpDuration {
+    type Error = ConversionError;
+
+    fn try_into(self) -> Result<time::Duration, ConversionError> {
+        let abs = time::Duration::seconds_f64(self.0);
+
+        Ok(abs * self.signum())
+    }
+}
+
 /// Represents a date and time
 ///
 /// It's main purpose is to have a wrapper for different date and time representations, which
@@ -101,7 +113,8 @@ impl TryInto<chrono::Duration> for SntpDuration {
 /// always return with UTC timestamps. If you need timezone support then you have to use
 /// external time crate like chrono.
 ///
-/// If chrono support is enabled then it will have [`TryInto<chrono::DateTime<Utc>>´] implemented.
+/// If `chrono` crate support is enabled then it will have [`TryInto<chrono::DateTime<Utc>>`] implemented.
+/// If `time` crate support is enabled then it will have [`TryInto<time::OffsetDateTime>`] implemented.
 #[derive(Debug, Clone, Copy)]
 pub struct SntpDateTime {
     offset: SntpDuration,
@@ -115,7 +128,7 @@ impl SntpDateTime {
     /// Returns with the duration since Unix epoch i.e. Unix timestamp
     ///
     /// Then conversion can fail in cases like internal overflow or when
-    /// the date is not representable with unit timestamp (like it is
+    /// the date is not representable with a Unix timestamp (like it is
     /// before Unix epoch).
     ///
     /// Note that the function uses the actual system time during execution
@@ -157,6 +170,19 @@ impl TryInto<chrono::DateTime<chrono::Utc>> for SntpDateTime {
 
         chrono::Utc::now()
             .checked_add_signed(chrono_offset)
+            .ok_or(ConversionError::Overflow)
+    }
+}
+
+#[cfg(feature = "time")]
+impl TryInto<time::OffsetDateTime> for SntpDateTime {
+    type Error = ConversionError;
+
+    fn try_into(self) -> Result<time::OffsetDateTime, ConversionError> {
+        let time_offset: time::Duration = self.offset.try_into()?;
+
+        time::OffsetDateTime::now_utc()
+            .checked_add(time_offset)
             .ok_or(ConversionError::Overflow)
     }
 }

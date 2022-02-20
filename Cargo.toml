@@ -17,6 +17,7 @@ async = ["tokio"]
 
 [dependencies]
 chrono = { version = "^0.4.10", optional = true }
+time = { version = "^0.3.7", optional = true }
 tokio = { version = "^1.0", features = ["net", "time"], optional = true }
 
 [package.metadata.docs.rs]
