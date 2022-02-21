@@ -116,9 +116,7 @@ impl TryInto<time::Duration> for SntpDuration {
     type Error = ConversionError;
 
     fn try_into(self) -> Result<time::Duration, ConversionError> {
-        let abs = time::Duration::seconds_f64(self.0);
-
-        Ok(abs * self.signum())
+        Ok(time::Duration::seconds_f64(self.0))
     }
 }
 
