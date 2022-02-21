@@ -1,46 +1,37 @@
-//! # rsntp
-//!
-//! An [RFC 4330](https://tools.ietf.org/html/rfc4330) compliant Simple Network Time Protocol (SNTP) client
-//! library for Rust.
-//!
-//! `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
-//!
-//! * Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
-//! * Time and date handling based on the `chrono` crate (can be disabled)
-//! * IPv6 support
-//!
-//! ## Usage
-//!
-//! Add this to your `Cargo.toml`:
-//!
-//! ```toml
-//! [dependencies]
-//! rsntp = "2.1.0"
-//! ```
-//!
 #![cfg_attr(
-    feature = "async",
+    all(feature = "async", feature = "chrono", feature = "time"),
     doc = r##"
+# rsntp
+An [RFC 4330](https://tools.ietf.org/html/rfc4330) compliant Simple Network Time Protocol (SNTP) client
+library for Rust.
 
-//! Obtain the current local time with the blocking API:
-//!
-//! ```no_run
-//! use rsntp::SntpClient;
-//! use chrono::{DateTime, Local};
-//!
-//! let client = SntpClient::new();
-//! let result = client.synchronize("pool.ntp.org").unwrap();
-//!
-//! let local_time: DateTime<Local> = DateTime::from(result.datetime().as_chrono_datetime_utc());
-//!
-//! println!("Current time is: {}", local_time);
-//! ```
-//!
-//! "##
-)]
-#![cfg_attr(
-    all(feature = "async", feature = "chrono"),
-    doc = r##"
+`rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
+* Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
+* Optional support for time and date crates `chrono` and `time` (`chrono` is enabled by
+  default)
+* IPv6 support
+
+## Usage
+
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+rsntp = "2.1.0"
+```
+
+Obtain the current local time with the blocking API:
+
+```no_run
+use rsntp::SntpClient;
+use chrono::{DateTime, Local};
+let client = SntpClient::new();
+let result = client.synchronize("pool.ntp.org").unwrap();
+let local_time: DateTime<Local> =
+  DateTime::from(result.datetime().into_chrono_datetime().unwrap());
+
+println!("Current time is: {}", local_time);
+```
 
 A function which uses the asynchronous API to obtain local time:
 
@@ -51,11 +42,61 @@ use chrono::{DateTime, Local, Utc};
 async fn local_time() -> DateTime<Local> {
   let client = AsyncSntpClient::new();
   let result = client.synchronize("pool.ntp.org").await.unwrap();
-  let utc_time: DateTime<Utc> = result.datetime().try_into().unwrap();
-  
-  DateTime::from(utc_time)
+   
+   DateTime::from(result.datetime().into_chrono_datetime().unwrap())
 }
 ```
+
+## API changes in version 3.0
+
+Version 3.0 made core code independent of `chrono` crate and added support for `time` crate.
+This led to some breaking API changes, `SynchronizationResult` methods will return with wrappers
+struct instead of `chrono` ones. Those wrapper structs has `TryInto` implementation and helper
+methods to convert them to `chrono` format.
+
+To convert old code, replace
+```no_run
+# use rsntp::SntpClient;
+# let result = SntpClient::new().synchronize("pool.ntp.org").unwrap();
+let datetime = result.datetime();
+```
+with
+```no_run
+# use rsntp::SntpClient;
+# use chrono::{DateTime, Utc};
+# let result = SntpClient::new().synchronize("pool.ntp.org").unwrap();
+let datetime = result.datetime().into_chrono_datetime().unwrap();
+```
+or with
+```no_run
+# use rsntp::SntpClient;
+# use chrono::{DateTime, Utc};
+# let result = SntpClient::new().synchronize("pool.ntp.org").unwrap();
+let datetime: chrono::DateTime<Utc> = result.datetime().try_into().unwrap();
+```
+
+## Support for time and date crates
+
+`rsntp` supports returning time data in multiple different formats. By default, `chrono`
+support is enabled, see examples above to use it. You can also use `time` crate support, if
+you enable `time` feature:
+
+```no_run
+use rsntp::SntpClient;
+
+let client = SntpClient::new();
+let result = client.synchronize("pool.ntp.org").unwrap();
+
+let utc_time = result
+  .datetime()
+  .into_offset_date_time()
+  .unwrap();
+
+println!("UTC time is: {}", local_time);
+```
+
+Support for both crates can be disabled or both can be enabled at the same time.
+
 ## Disabling asynchronous API
 
 The asynchronous API is enabled by default but you can optionally disable it. This removes
@@ -65,27 +106,35 @@ dependency to `tokio` which reduces crate dependencies significantly.
 [dependencies]
 rsntp = { version = "2.1.0", default-features = false }
 ```
+
+## System clock assumptions
+
+`rsntp` assumes that system clock is monotonic and stable. This is especially important
+with the `SynchronizationResult::datetime()` method, as `SynchronizationResult` stores just
+an offset to the system clock. If the system clock is changed between synchronization
+and the call to this method, then offset will not be valid anymore and some undefined result
+will be returned.
+
+## IPv6 support
+
+`rsntp` supports IPv6, but by default (for compatilibty reasons) it binds its UDP socket to an
+IPv4 address (0.0.0.0) which might prevent synchronization with IPv6 servers.
+
+To use IPv6, you need to set an IPv6 bind address:
+
+```no_run
+use rsntp::{Config, SntpClient};
+use std::net::Ipv6Addr;
+
+let config = Config::default().bind_address((Ipv6Addr::UNSPECIFIED, 0).into());
+let client = SntpClient::with_config(config);
+
+let result = client.synchronize("2.pool.ntp.org").unwrap();
+
+let unix_timestamp_utc = result.datetime().unix_timestamp();
+```
 "##
 )]
-//! ## IPv6 support
-//!
-//! `rsntp` supports IPv6, but by default (for compatilibty reasons) it binds its UDP socket to an
-//! IPv4 address (0.0.0.0) which might prevent synchronization with IPv6 servers.
-//!
-//! To use IPv6, you need to set an IPv6 bind address:
-//!
-//! ```no_run
-//! use rsntp::{Config, SntpClient};
-//! use std::net::Ipv6Addr;
-//!
-//! let config = Config::default().bind_address((Ipv6Addr::UNSPECIFIED, 0).into());
-//! let client = SntpClient::with_config(config);
-//!
-//! let result = client.synchronize("2.pool.ntp.org").unwrap();
-//!
-//! let unix_timestamp_utc = result.datetime().unix_timestamp();
-//! ```
-//!
 
 mod core_logic;
 mod error;
@@ -93,7 +142,7 @@ mod packet;
 mod result;
 mod to_server_addrs;
 
-pub use error::{KissCode, ProtocolError, SynchroniztationError};
+pub use error::{ConversionError, KissCode, ProtocolError, SynchroniztationError};
 pub use packet::{LeapIndicator, ReferenceIdentifier};
 pub use result::{SntpDateTime, SntpDuration, SynchronizationResult};
 pub use to_server_addrs::ToServerAddrs;

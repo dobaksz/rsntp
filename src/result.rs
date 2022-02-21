@@ -8,7 +8,7 @@ use std::time::SystemTime;
 ///
 /// It's main purpose is to store signed duration values which the [`std::time::Duration`] is not
 /// capable of, while making it possible to return a time-crate independent duration values
-/// (i.e. it works without crono support enabled).
+/// (i.e. it works without `chrono` support enabled).
 ///
 /// It can be converted to a different duration representation, depending on the
 /// enabled time crate support or it has some methods to inspect its value directly.
@@ -79,6 +79,24 @@ impl SntpDuration {
     pub fn as_secs_f64(&self) -> f64 {
         self.0
     }
+
+    /// Convert instance to [`chrono::Duration`]
+    ///
+    /// Convenience wrapper for [`TryInto<chrono::Duration>::try_into`] to avoid
+    /// type annotations.
+    #[cfg(feature = "chrono")]
+    pub fn into_chrono_duration(self) -> Result<chrono::Duration, ConversionError> {
+        self.try_into()
+    }
+
+    /// Convert instance to [`time::Duration`]
+    ///
+    /// Convenience wrapper for [`TryInto<time::Duration>::try_into`] to avoid
+    /// type annotations.
+    #[cfg(feature = "time")]
+    pub fn into_time_duration(self) -> Result<time::Duration, ConversionError> {
+        self.try_into()
+    }
 }
 
 #[cfg(feature = "chrono")]
@@ -109,9 +127,9 @@ impl TryInto<time::Duration> for SntpDuration {
 /// It's main purpose is to have a wrapper for different date and time representations, which
 /// is usable regadless of the enabled time crate support.
 ///
-/// It can be inspected directly, but there is no built-in timezone conversion so it will
+/// It can be inspected directly, but there is no built-in timezone conversion, it will
 /// always return with UTC timestamps. If you need timezone support then you have to use
-/// external time crate like chrono.
+/// `chrono` or `time` crate for conversion.
 ///
 /// If `chrono` crate support is enabled then it will have [`TryInto<chrono::DateTime<Utc>>`] implemented.
 /// If `time` crate support is enabled then it will have [`TryInto<time::OffsetDateTime>`] implemented.
@@ -133,7 +151,7 @@ impl SntpDateTime {
     ///
     /// Note that the function uses the actual system time during execution
     /// so assumes that it is monotonic. If the time has been changed
-    /// between the actual synchronization and the call of this function
+    /// between the actual synchronization and the call of this function,
     /// then it may return with undefined results.
     ///
     /// ```no_run
@@ -158,6 +176,24 @@ impl SntpDateTime {
         corrected
             .duration_since(SystemTime::UNIX_EPOCH)
             .map_err(|_| ConversionError::Overflow)
+    }
+
+    /// Convert instance to [`chrono::DateTime<chrono::Utc>`].
+    ///
+    /// Convenience wrapper for [`TryInto<chrono::DateTime<chrono::Utc>>::try_into`]
+    /// to avoid type annotations.
+    #[cfg(feature = "chrono")]
+    pub fn into_chrono_datetime(self) -> Result<chrono::DateTime<chrono::Utc>, ConversionError> {
+        self.try_into()
+    }
+
+    /// Convert instance to [`time::OffsetDateTime`].
+    ///
+    /// Convenience wrapper for [`TryInto<time::OffsetDateTime>::try_into`]
+    /// to avoid type annotations.
+    #[cfg(feature = "time")]
+    pub fn into_offset_date_time(self) -> Result<time::OffsetDateTime, ConversionError> {
+        self.try_into()
     }
 }
 
