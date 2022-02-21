@@ -92,7 +92,7 @@ let utc_time = result
   .into_offset_date_time()
   .unwrap();
 
-println!("UTC time is: {}", local_time);
+println!("UTC time is: {}", utc_time);
 ```
 
 Support for both crates can be disabled or both can be enabled at the same time.
