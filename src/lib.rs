@@ -2,6 +2,7 @@
     all(feature = "async", feature = "chrono", feature = "time"),
     doc = r##"
 # rsntp
+
 An [RFC 4330](https://tools.ietf.org/html/rfc4330) compliant Simple Network Time Protocol (SNTP) client
 library for Rust.
 
@@ -25,8 +26,10 @@ Obtain the current local time with the blocking API:
 ```no_run
 use rsntp::SntpClient;
 use chrono::{DateTime, Local};
+
 let client = SntpClient::new();
 let result = client.synchronize("pool.ntp.org").unwrap();
+
 let local_time: DateTime<Local> =
   DateTime::from(result.datetime().into_chrono_datetime().unwrap());
 
