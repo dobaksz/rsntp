@@ -437,6 +437,19 @@ mod tests {
     //        assert!(nan_duration_result.is_err());
     //    }
 
+    #[cfg(feature = "time")]
+    #[test]
+    fn sntp_duration_converting_to_time_duration_works() {
+        let positive_duration = SntpDuration::from_secs_f64(3600.0);
+        let negative_duration = SntpDuration::from_secs_f64(-3600.0);
+
+        let positive_time: time::Duration = positive_duration.try_into().unwrap();
+        let negative_time: time::Duration = negative_duration.try_into().unwrap();
+
+        assert_eq!(positive_time, time::Duration::hours(1));
+        assert_eq!(negative_time, time::Duration::hours(-1));
+    }
+
     #[cfg(feature = "chrono")]
     #[test]
     fn sntp_date_time_converting_to_chrono_datetime_works() {
@@ -457,4 +470,15 @@ mod tests {
     //
     //        assert!(converted.is_err());
     //    }
+
+    #[cfg(feature = "time")]
+    #[test]
+    fn sntp_date_time_converting_to_time_offset_datetime_works() {
+        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(0.1));
+        let converted: time::OffsetDateTime = datetime.try_into().unwrap();
+        let diff = converted - time::OffsetDateTime::now_utc();
+
+        assert!(diff.whole_milliseconds() > 90);
+        assert!(diff.whole_milliseconds() < 110);
+    }
 }
