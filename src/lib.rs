@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rsntp = "2.1.0"
+rsntp = "3.0.0"
 ```
 
 Obtain the current local time with the blocking API:
@@ -109,7 +109,7 @@ dependency to `tokio` which reduces crate dependencies significantly.
 
 ```toml
 [dependencies]
-rsntp = { version = "2.1.0", default-features = false }
+rsntp = { version = "3.0.0", default-features = false }
 ```
 
 ## System clock assumptions

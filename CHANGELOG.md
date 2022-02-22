@@ -1,5 +1,9 @@
 # Changlelog
 
+## 3.0.0
+- Core code made idependent of `chrono` crate, `chrono` feature is added to disable support for that crate
+- Added support for returning results in `time` crate format
+
 ## 2.1.0
 - New configuration API, which allows to set instance config without making it mutable
 
