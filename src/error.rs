@@ -154,7 +154,7 @@ impl Display for ProtocolError {
                 write!(f, "Server reply contains invalid reference identifier")
             }
             ProtocolError::KissODeath(code) => {
-                write!(f, "Kiss-o'-Death packet received: {}", code.to_string())
+                write!(f, "Kiss-o'-Death packet received: {}", code)
             }
         }
     }
@@ -184,10 +184,10 @@ impl Display for SynchroniztationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SynchroniztationError::IOError(io_error) => {
-                write!(f, "Input/output error: {}", io_error.to_string())
+                write!(f, "Input/output error: {}", io_error)
             }
             SynchroniztationError::ProtocolError(protocol_error) => {
-                write!(f, "Protocol error: {}", protocol_error.to_string())
+                write!(f, "Protocol error: {}", protocol_error)
             }
         }
     }
@@ -202,5 +202,24 @@ impl From<std::io::Error> for SynchroniztationError {
 impl From<ProtocolError> for SynchroniztationError {
     fn from(protocol_error: ProtocolError) -> SynchroniztationError {
         SynchroniztationError::ProtocolError(protocol_error)
+    }
+}
+
+/// Reresents an error which occured during internal timestamp conversion
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ConversionError {
+    /// An artimetic over/underflow
+    Overflow,
+}
+
+impl Error for ConversionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+impl Display for ConversionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Overflow during timestamp conversion")
     }
 }

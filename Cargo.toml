@@ -12,9 +12,13 @@ readme = "README.md"
 description = "An RFC 4330 compliant Simple Network Time Protocol (SNTP) client library for Rust"
 
 [features]
-default = ["async"]
+default = ["async", "chrono"]
 async = ["tokio"]
 
 [dependencies]
-chrono = "^0.4.10"
+chrono = { version = "^0.4.10", optional = true }
+time = { version = "^0.3.7", optional = true }
 tokio = { version = "^1.0", features = ["net", "time"], optional = true }
+
+[package.metadata.docs.rs]
+all-features = true
