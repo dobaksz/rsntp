@@ -7,7 +7,7 @@ An [RFC 4330](https://tools.ietf.org/html/rfc4330) compliant Simple Network Time
 library for Rust.
 
 `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
-* Provides both a synchronous (blocking) and an (optional) asynchronous API based `tokio`
+* Provides both a synchronous (blocking) and an (optional) asynchronous API based on `tokio`
 * Optional support for time and date crates `chrono` and `time` (`chrono` is enabled by
   default)
 * IPv6 support
@@ -77,6 +77,8 @@ or with
 # let result = SntpClient::new().synchronize("pool.ntp.org").unwrap();
 let datetime: chrono::DateTime<Utc> = result.datetime().try_into().unwrap();
 ```
+
+The same applies to `Duration`s returned by `SynchronizationResult`.
 
 ## Support for time and date crates
 
