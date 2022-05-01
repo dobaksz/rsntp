@@ -1,5 +1,8 @@
 # Changlelog
 
+## 3.0.1
+- Minor documentation corrections
+
 ## 3.0.0
 - Core code made idependent of `chrono` crate, `chrono` feature is added to disable support for that crate
 - Added support for returning results in `time` crate format
