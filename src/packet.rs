@@ -130,7 +130,7 @@ impl Mode {
 
 /// Identifies the particular reference source.  
 ///
-/// * For primary servers, the value is a four-character ASCII string. For possible values see RFC4330, section 4.
+/// * For primary servers, the value is a four-character ASCII string. For possible values see RFC 5905, section 7.3.
 /// * For IPv4 secondary servers, the value is the IPv4 address of the synchronization source.
 /// * For IPv6 secondary servers, the value is the first 32 bits of the MD5 hash of the IPv6 address of the
 ///   synchronization source

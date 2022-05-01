@@ -9,7 +9,7 @@ keywords = ["sntp", "time", "async"]
 categories = ["network-programming"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-description = "An RFC 4330 compliant Simple Network Time Protocol (SNTP) client library for Rust"
+description = "An RFC 5905 compliant Simple Network Time Protocol (SNTP) client library for Rust"
 
 [features]
 default = ["async", "chrono"]

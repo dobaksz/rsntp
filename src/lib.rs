@@ -3,7 +3,7 @@
     doc = r##"
 # rsntp
 
-An [RFC 4330](https://tools.ietf.org/html/rfc4330) compliant Simple Network Time Protocol (SNTP) client
+An [RFC 5905](https://www.rfc-editor.org/rfc/rfc5905.txt) compliant Simple Network Time Protocol (SNTP) client
 library for Rust.
 
 `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
@@ -109,7 +109,7 @@ dependency to `tokio` which reduces crate dependencies significantly.
 
 ```toml
 [dependencies]
-rsntp = { version = "3.0.0", default-features = false }
+rsntp = { version = "3.0.0", default-features = false, features = ["chrono"]  }
 ```
 
 ## System clock assumptions
