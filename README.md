@@ -1,5 +1,5 @@
 [![](https://img.shields.io/crates/v/rsntp)](https://crates.io/crates/rsntp)
-[![Build Status](https://app.travis-ci.com/dobaksz/rsntp.svg?branch=master)](https://app.travis-ci.com/dobaksz/rsntp)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/dobaksz/rsntp/tree/master.svg?style=shield)](https://dl.circleci.com/status-badge/redirect/gh/dobaksz/rsntp/tree/master)
 
 # rsntp
 

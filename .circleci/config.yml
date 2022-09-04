@@ -1,0 +1,29 @@
+version: 2.1
+
+jobs:
+  rust-tests:
+    parameters:
+      extra-args:
+        type: string
+        default: ""
+    docker:
+      - image: cimg/rust:1.63
+    steps:
+      - checkout
+      - run: cargo test << parameters.extra-args >>
+
+workflows:
+  rust-tests-workflow:
+    jobs:
+      - rust-tests:
+          matrix:
+            parameters:
+              extra-args:
+                - ""
+                - "--no-default-features"
+                - "--no-default-features --features async"
+                - "--no-default-features --features chrono"
+                - "--no-default-features --features time"
+                - "--no-default-features --features async,time"
+                - "--no-default-features --features chrono,time"
+                - "--no-default-features --features async,chrono,time"
