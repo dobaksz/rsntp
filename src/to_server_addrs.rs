@@ -3,14 +3,14 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV
 /// A trait for objects which can be converted or resolved to one or more SocketAddr values with or
 /// without a port.
 ///
-/// This is similar to the `std::net::ToSocketAddrs` trait, but port is optional. If no port is supplied
-/// then the user of this trait falls back to a default one.
+/// This trait is similar to the `std::net::ToSocketAddrs` trait, but the port is optional.
+/// If no port is supplied then the user of this trait falls back to a default one.
 ///
 /// It is implemented for almost all types `ToSocketAddrs` is implemented for, plus for some addition types
 /// where the optional port is not present (`(IpAddr, u16)`, and also for simple `IpAddr`). For string
-/// implementation the port is also optional, so both `<host>:<port>` and `<host>` can be used.
+/// implementation, the port is also optional, so both `<host>:<port>` and `<host>` can be used.
 ///
-/// The trait is intended to be opaque, details might change.
+/// The trait is intended to be opaque; details might change.
 ///
 /// # Examples
 ///
