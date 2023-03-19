@@ -1,5 +1,9 @@
 # Changlelog
 
+## 3.0.2
+- Added Default trait implementation for Config struct
+- Documentation corrections
+
 ## 3.0.1
 - Minor documentation corrections
 
