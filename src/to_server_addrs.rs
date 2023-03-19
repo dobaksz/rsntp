@@ -129,7 +129,7 @@ impl ToServerAddrs for String {
     type Return = String;
 
     fn to_server_addrs(&self, default_port: u16) -> Self::Return {
-        (&**self).to_server_addrs(default_port)
+        (**self).to_server_addrs(default_port)
     }
 }
 
