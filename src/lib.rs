@@ -154,6 +154,7 @@ pub use to_server_addrs::ToServerAddrs;
 
 use core_logic::{Reply, Request};
 use packet::Packet;
+use std::default::Default;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
@@ -184,22 +185,6 @@ pub struct Config {
 }
 
 impl Config {
-    /// Creates an instance with default configuration
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use rsntp::Config;
-    ///
-    /// let config = Config::default();
-    /// ```
-    pub fn default() -> Config {
-        Config {
-            bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            timeout: Duration::from_secs(3),
-        }
-    }
-
     /// Set UDP bind address
     ///
     /// Sets the local address which is used to send/receive UDP packets. By default it is
@@ -240,6 +225,24 @@ impl Config {
         Config {
             bind_address: self.bind_address,
             timeout,
+        }
+    }
+}
+
+impl Default for Config {
+    /// Creates an instance with default configuration
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::Config;
+    ///
+    /// let config = Config::default();
+    /// ```
+    fn default() -> Config {
+        Config {
+            bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            timeout: Duration::from_secs(3),
         }
     }
 }
