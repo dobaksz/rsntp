@@ -1,4 +1,4 @@
-use crate::error::{KissCode, ProtocolError, SynchroniztationError};
+use crate::error::{KissCode, ProtocolError, SynchronizationError};
 use crate::packet::{LeapIndicator, Mode, Packet, ReferenceIdentifier, SntpTimestamp};
 use crate::result::SynchronizationResult;
 use std::time::SystemTime;
@@ -76,7 +76,7 @@ impl Reply {
         Ok(())
     }
 
-    pub fn process(self) -> Result<SynchronizationResult, SynchroniztationError> {
+    pub fn process(self) -> Result<SynchronizationResult, SynchronizationError> {
         self.check()?;
 
         let originate_ts = self.reply.originate_timestamp;
@@ -259,7 +259,7 @@ mod tests {
 
         let err = reply.process().unwrap_err();
 
-        if let SynchroniztationError::ProtocolError(ProtocolError::KissODeath(
+        if let SynchronizationError::ProtocolError(ProtocolError::KissODeath(
             KissCode::RateExceeded,
         )) = err
         {
