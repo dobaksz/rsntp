@@ -149,7 +149,7 @@ mod packet;
 mod result;
 mod to_server_addrs;
 
-pub use error::{ConversionError, KissCode, ProtocolError, SynchroniztationError};
+pub use error::{ConversionError, KissCode, ProtocolError, SynchronizationError};
 pub use packet::{LeapIndicator, ReferenceIdentifier};
 pub use result::{SntpDateTime, SntpDuration, SynchronizationResult};
 pub use to_server_addrs::ToServerAddrs;
@@ -304,7 +304,7 @@ impl SntpClient {
     pub fn synchronize<A: ToServerAddrs>(
         &self,
         server_address: A,
-    ) -> Result<SynchronizationResult, SynchroniztationError> {
+    ) -> Result<SynchronizationResult, SynchronizationError> {
         let socket = std::net::UdpSocket::bind(self.config.bind_address)?;
 
         socket.set_read_timeout(Some(self.config.timeout))?;
@@ -437,9 +437,9 @@ impl AsyncSntpClient {
     /// # Example
     ///
     /// ```no_run
-    /// use rsntp::{AsyncSntpClient, SynchronizationResult, SynchroniztationError};
+    /// use rsntp::{AsyncSntpClient, SynchronizationResult, SynchronizationError};
     ///
-    /// async fn local_time() -> Result<SynchronizationResult, SynchroniztationError> {
+    /// async fn local_time() -> Result<SynchronizationResult, SynchronizationError> {
     ///   let client = AsyncSntpClient::new();
     ///   
     ///   client.synchronize("pool.ntp.org").await
@@ -448,7 +448,7 @@ impl AsyncSntpClient {
     pub async fn synchronize<A: ToServerAddrs>(
         &self,
         server_address: A,
-    ) -> Result<SynchronizationResult, SynchroniztationError> {
+    ) -> Result<SynchronizationResult, SynchronizationError> {
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
         let socket = tokio::net::UdpSocket::bind(self.config.bind_address).await?;

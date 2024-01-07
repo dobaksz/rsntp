@@ -164,44 +164,44 @@ impl Display for ProtocolError {
 ///
 /// Returned when synchronization fails.
 #[derive(Debug)]
-pub enum SynchroniztationError {
+pub enum SynchronizationError {
     /// An I/O error occured during the query, like socket error, timeout, etc...
     IOError(std::io::Error),
     /// SNTP protocol specific error
     ProtocolError(ProtocolError),
 }
 
-impl Error for SynchroniztationError {
+impl Error for SynchronizationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            SynchroniztationError::IOError(io_error) => Some(io_error),
-            SynchroniztationError::ProtocolError(protocol_error) => Some(protocol_error),
+            SynchronizationError::IOError(io_error) => Some(io_error),
+            SynchronizationError::ProtocolError(protocol_error) => Some(protocol_error),
         }
     }
 }
 
-impl Display for SynchroniztationError {
+impl Display for SynchronizationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SynchroniztationError::IOError(io_error) => {
+            SynchronizationError::IOError(io_error) => {
                 write!(f, "Input/output error: {}", io_error)
             }
-            SynchroniztationError::ProtocolError(protocol_error) => {
+            SynchronizationError::ProtocolError(protocol_error) => {
                 write!(f, "Protocol error: {}", protocol_error)
             }
         }
     }
 }
 
-impl From<std::io::Error> for SynchroniztationError {
-    fn from(io_error: std::io::Error) -> SynchroniztationError {
-        SynchroniztationError::IOError(io_error)
+impl From<std::io::Error> for SynchronizationError {
+    fn from(io_error: std::io::Error) -> SynchronizationError {
+        SynchronizationError::IOError(io_error)
     }
 }
 
-impl From<ProtocolError> for SynchroniztationError {
-    fn from(protocol_error: ProtocolError) -> SynchroniztationError {
-        SynchroniztationError::ProtocolError(protocol_error)
+impl From<ProtocolError> for SynchronizationError {
+    fn from(protocol_error: ProtocolError) -> SynchronizationError {
+        SynchronizationError::ProtocolError(protocol_error)
     }
 }
 
