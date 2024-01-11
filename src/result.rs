@@ -40,8 +40,7 @@ impl SntpDuration {
     /// println!("Clock offset: {} seconds", clock_offset);
     /// ```
     pub fn abs_as_std_duration(&self) -> Result<std::time::Duration, ConversionError> {
-        // TODO: make this fallible when std::time::Duration::try_from_secs_f64 is stabilized
-        Ok(std::time::Duration::from_secs_f64(self.0.abs()))
+        std::time::Duration::try_from_secs_f64(self.0.abs()).map_err(|_| ConversionError::Overflow)
     }
 
     /// Returns with the sign of the duration
@@ -411,6 +410,13 @@ mod tests {
 
         assert_eq!(positive_duration.signum(), 1);
         assert_eq!(negative_duration.signum(), -1);
+    }
+
+    #[test]
+    fn sntp_duration_abs_fails_on_overflow() {
+        let duration = SntpDuration::from_secs_f64(2e19);
+
+        assert!(duration.abs_as_std_duration().is_err());
     }
 
     #[cfg(feature = "chrono")]
