@@ -205,6 +205,35 @@ impl From<ProtocolError> for SynchronizationError {
     }
 }
 
+impl SynchronizationError {
+    /// Check if the error is a Kiss-o'-Death.
+
+    /// KoD is a special error case as it indicates that client should stop sending request
+    /// to the server. This helper function checks directly for that error condition.
+    ///
+    /// ```no_run
+    /// use rsntp::SntpClient;
+    ///
+    /// let client = SntpClient::new();
+    /// let result = client.synchronize("pool.ntp.org");
+    ///
+    /// if let Err(err) = result {
+    ///     if err.is_kiss_of_death() {
+    ///         println!("Kiss-o'-Death")
+    ///     }
+    /// }
+    /// ```
+    pub fn is_kiss_of_death(&self) -> bool {
+        match self {
+            SynchronizationError::ProtocolError(protocol_error) => match protocol_error {
+                ProtocolError::KissODeath(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+}
+
 /// Reresents an error which occured during internal timestamp conversion
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ConversionError {
