@@ -224,13 +224,10 @@ impl SynchronizationError {
     /// }
     /// ```
     pub fn is_kiss_of_death(&self) -> bool {
-        match self {
-            SynchronizationError::ProtocolError(protocol_error) => match protocol_error {
-                ProtocolError::KissODeath(_) => true,
-                _ => false,
-            },
-            _ => false,
-        }
+        matches!(
+            self,
+            SynchronizationError::ProtocolError(ProtocolError::KissODeath(_))
+        )
     }
 }
 
