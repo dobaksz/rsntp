@@ -432,16 +432,14 @@ mod tests {
         assert_eq!(negative_chrono, chrono::Duration::hours(-1));
     }
 
-    // TODO: converting to chono::Duration does not really fails but runs into
-    // a panic in the time crate. Seems like a bug.
-    //    #[cfg(feature = "chrono")]
-    //    #[test]
-    //    fn sntp_duration_converting_to_chrono_duration_fails() {
-    //        let nan_duration_result: Result<chrono::Duration, ConversionError> =
-    //           SntpDuration::from_secs_f64(f64::NAN).try_into();
-    //
-    //        assert!(nan_duration_result.is_err());
-    //    }
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn sntp_duration_converting_to_chrono_duration_fails() {
+        let nan_duration_result: Result<chrono::Duration, ConversionError> =
+            SntpDuration::from_secs_f64(f64::NAN).try_into();
+
+        assert!(nan_duration_result.is_err());
+    }
 
     #[cfg(feature = "time")]
     #[test]
@@ -467,15 +465,14 @@ mod tests {
         assert!(diff.num_milliseconds() < 110);
     }
 
-    // TODO: converting to chono::Duration does not really fails but runs into
-    //    #[cfg(feature = "chrono")]
-    //    #[test]
-    //    fn sntp_date_time_converting_to_chrono_datetime_fails_for_nan() {
-    //        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(f64::NAN));
-    //        let converted: Result<chrono::DateTime<chrono::Utc>, ConversionError> = datetime.try_into();
-    //
-    //        assert!(converted.is_err());
-    //    }
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn sntp_date_time_converting_to_chrono_datetime_fails_for_nan() {
+        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(f64::NAN));
+        let converted: Result<chrono::DateTime<chrono::Utc>, ConversionError> = datetime.try_into();
+
+        assert!(converted.is_err());
+    }
 
     #[cfg(feature = "time")]
     #[test]
