@@ -175,6 +175,14 @@ impl SntpDateTime {
             .map_err(|_| ConversionError::Overflow)
     }
 
+    /// Convert instance to [`std::time::SystemTime`].
+    ///
+    /// Convenience wrapper for [`TryInto<std::time::SystemTime>::try_into`]
+    /// to avoid type annotations.
+    pub fn into_system_time(self) -> Result<std::time::SystemTime, ConversionError> {
+        self.try_into()
+    }
+
     /// Convert instance to [`chrono::DateTime<chrono::Utc>`].
     ///
     /// Convenience wrapper for [`TryInto<chrono::DateTime<chrono::Utc>>::try_into`]
@@ -191,6 +199,22 @@ impl SntpDateTime {
     #[cfg(feature = "time")]
     pub fn into_offset_date_time(self) -> Result<time::OffsetDateTime, ConversionError> {
         self.try_into()
+    }
+}
+
+impl TryInto<std::time::SystemTime> for SntpDateTime {
+    type Error = ConversionError;
+
+    fn try_into(self) -> Result<std::time::SystemTime, ConversionError> {
+        if self.offset.signum() > 0 {
+            SystemTime::now()
+                .checked_add(self.offset.abs_as_std_duration()?)
+                .ok_or(ConversionError::Overflow)
+        } else {
+            SystemTime::now()
+                .checked_sub(self.offset.abs_as_std_duration()?)
+                .ok_or(ConversionError::Overflow)
+        }
     }
 }
 
@@ -452,6 +476,28 @@ mod tests {
 
         assert_eq!(positive_time, time::Duration::hours(1));
         assert_eq!(negative_time, time::Duration::hours(-1));
+    }
+
+    #[test]
+    fn sntp_date_time_converting_to_system_time_works() {
+        let now = std::time::SystemTime::now();
+        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(3600.0));
+
+        let systemtime_1 = datetime.into_system_time().unwrap();
+        let systemtime_2 = now
+            .checked_add(std::time::Duration::from_secs_f64(3600.0))
+            .unwrap();
+
+        assert_eq!(
+            systemtime_1
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis(),
+            systemtime_2
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
     }
 
     #[cfg(feature = "chrono")]
