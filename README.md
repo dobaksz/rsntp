@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rsntp = "3.0.2"
+rsntp = "4.0.0"
 ```
 
 Obtain the current local time with the blocking API:
@@ -103,7 +103,7 @@ the amount of dependencies significantly.
 
 ```toml
 [dependencies]
-rsntp = { version = "3.0.2", default-features = false, features = ["chrono"] }
+rsntp = { version = "4.0.0", default-features = false, features = ["chrono"] }
 ```
 
 ## System clock assumptions

@@ -1,5 +1,10 @@
 # Changlelog
 
+## 4.0.0
+- Correct typo in SynchronizationError (might break compilation)
+- Helper function to check for Kiss-o'-death
+- SntpDateTime is now convertible to SystemTime
+
 ## 3.0.2
 - Added Default trait implementation for Config struct
 - Documentation corrections
