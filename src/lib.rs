@@ -487,6 +487,8 @@ impl AsyncSntpClient {
         socket
             .connect(server_address.to_server_addrs(SNTP_PORT))
             .await?;
+
+        let request_time = std::time::Instant::now();
         let request = Request::new_with_transmit_time(reference_time);
 
         socket.send(&request.as_bytes()).await?;
@@ -500,14 +502,23 @@ impl AsyncSntpClient {
             )
         })??;
 
-        let reply = Reply::new(
+        let elapsed = request_time.elapsed();
+        let adjusted_reference_time =
+            reference_time
+                .checked_add(elapsed)
+                .ok_or(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Time overflow when adjusting reference time",
+                ))?;
+
+        let reply = Reply::new_with_reply_time(
             request,
             Packet::from_bytes(&receive_buffer[..bytes_received], server_address)?,
+            adjusted_reference_time,
         );
 
         reply.process()
     }
-
     /// Sets synchronization timeout
     ///
     /// Sets the time which the client waits for a reply after the request has been sent.
