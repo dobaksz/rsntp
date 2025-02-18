@@ -207,7 +207,6 @@ impl From<ProtocolError> for SynchronizationError {
 
 impl SynchronizationError {
     /// Check if the error is a Kiss-o'-Death.
-
     /// KoD is a special error case as it indicates that client should stop sending request
     /// to the server. This helper function checks directly for that error condition.
     ///

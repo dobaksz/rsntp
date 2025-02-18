@@ -15,9 +15,6 @@ fn main() {
         time_info.datetime().unix_timestamp().unwrap().as_secs()
     );
 
-    println!(
-        "Reference identifier: {}",
-        time_info.reference_identifier().to_string()
-    );
+    println!("Reference identifier: {}", time_info.reference_identifier());
     println!("Stratum: {}", time_info.stratum());
 }

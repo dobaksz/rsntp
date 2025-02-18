@@ -16,10 +16,7 @@ fn chrono_example() {
     let local_time: DateTime<Local> = DateTime::from(datetime_utc);
     println!("Local time: {}", local_time);
 
-    println!(
-        "Reference identifier: {}",
-        time_info.reference_identifier().to_string()
-    );
+    println!("Reference identifier: {}", time_info.reference_identifier());
     println!("Stratum: {}", time_info.stratum());
 }
 
