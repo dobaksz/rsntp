@@ -308,12 +308,11 @@ impl SntpClient {
         let socket = std::net::UdpSocket::bind(self.config.bind_address)?;
 
         socket.set_read_timeout(Some(self.config.timeout))?;
-        socket.connect(server_address.to_server_addrs(SNTP_PORT))?;
 
         let request = Request::new();
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
-        socket.send(&request.as_bytes())?;
+        socket.send_to(&request.as_bytes(), server_address.to_server_addrs(SNTP_PORT))?;
         let (bytes_received, server_address) = socket.recv_from(&mut receive_buffer)?;
 
         let reply = Reply::new(
@@ -452,12 +451,10 @@ impl AsyncSntpClient {
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
         let socket = tokio::net::UdpSocket::bind(self.config.bind_address).await?;
-        socket
-            .connect(server_address.to_server_addrs(SNTP_PORT))
-            .await?;
+
         let request = Request::new();
 
-        socket.send(&request.as_bytes()).await?;
+        socket.send_to(&request.as_bytes(), server_address.to_server_addrs(SNTP_PORT)).await?;
 
         let result_future = timeout(self.config.timeout, socket.recv_from(&mut receive_buffer));
 
