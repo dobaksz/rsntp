@@ -10,6 +10,6 @@ let
     extensions = [ "rust-src" "rust-analyzer" ];
   };
 in pkgs.mkShell {
-  buildInputs = [ rust ] ++ (with pkgs; [ pkg-config ]);
+  buildInputs = [ rust ];
   RUST_BACKTRACE = 1;
 }
