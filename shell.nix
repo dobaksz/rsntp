@@ -6,20 +6,10 @@ let
     "https://github.com/oxalica/rust-overlay/archive/master.tar.gz");
   pkgs = import <nixpkgs> { overlays = [ rust_overlay ]; };
   rustVersion = "latest";
-  #rustVersion = "1.62.0";
   rust = pkgs.rust-bin.stable.${rustVersion}.default.override {
-    extensions = [
-      "rust-src" # for rust-analyzer
-      "rust-analyzer"
-    ];
+    extensions = [ "rust-src" "rust-analyzer" ];
   };
 in pkgs.mkShell {
-  buildInputs = [ rust ] ++ (with pkgs; [
-    pkg-config
-    protobuf_28
-    # other dependencies
-    #gtk3
-    #wrapGAppsHook
-  ]);
+  buildInputs = [ rust ] ++ (with pkgs; [ pkg-config ]);
   RUST_BACKTRACE = 1;
 }
