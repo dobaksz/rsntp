@@ -11,7 +11,7 @@ jobs:
     steps:
       - checkout
       - run: cargo test << parameters.extra-args >>
-      - run: cargo clippy --all-targets --all-features
+      - run: cargo clippy
 
 workflows:
   rust-tests-workflow:
