@@ -7,10 +7,11 @@ jobs:
         type: string
         default: ""
     docker:
-      - image: cimg/rust:1.75.0
+      - image: cimg/rust:1.88.0
     steps:
       - checkout
       - run: cargo test << parameters.extra-args >>
+      - run: cargo clippy --all-targets --all-features
 
 workflows:
   rust-tests-workflow:
