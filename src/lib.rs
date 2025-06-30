@@ -184,6 +184,7 @@ const SNTP_PORT: u16 = 123;
 pub struct Config {
     bind_address: SocketAddr,
     timeout: Duration,
+    connect_ip: bool,
 }
 
 impl Config {
@@ -205,7 +206,7 @@ impl Config {
     pub fn bind_address(self, address: SocketAddr) -> Config {
         Config {
             bind_address: address,
-            timeout: self.timeout,
+            ..self
         }
     }
 
@@ -224,10 +225,25 @@ impl Config {
     /// let client = SntpClient::with_config(config);
     /// ```
     pub fn timeout(self, timeout: Duration) -> Config {
-        Config {
-            bind_address: self.bind_address,
-            timeout,
-        }
+        Config { timeout, ..self }
+    }
+
+    /// Connect to the ip.
+    ///
+    /// Connect the socket to the address and allow only incomming messages from the address.
+    /// default is true
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use rsntp::{Config, SntpClient};
+    /// use std::time::Duration;
+    ///
+    /// let config = Config::default().connect_ip(true);
+    /// let client = SntpClient::with_config(config);
+    /// ```
+    pub fn connect_ip(self, connect_ip: bool) -> Self {
+        Config { connect_ip, ..self }
     }
 }
 
@@ -245,6 +261,7 @@ impl Default for Config {
         Config {
             bind_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             timeout: Duration::from_secs(3),
+            connect_ip: true,
         }
     }
 }
@@ -308,12 +325,14 @@ impl SntpClient {
         let socket = std::net::UdpSocket::bind(self.config.bind_address)?;
 
         socket.set_read_timeout(Some(self.config.timeout))?;
-        socket.connect(server_address.to_server_addrs(SNTP_PORT))?;
+        if self.config.connect_ip {
+            socket.connect(server_address.to_server_addrs(SNTP_PORT))?;
+        }
 
         let request = Request::new();
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
-        socket.send(&request.as_bytes())?;
+        socket.send_to(&request.as_bytes(), server_address.to_server_addrs(SNTP_PORT))?;
         let (bytes_received, server_address) = socket.recv_from(&mut receive_buffer)?;
 
         let reply = Reply::new(
@@ -452,12 +471,15 @@ impl AsyncSntpClient {
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
         let socket = tokio::net::UdpSocket::bind(self.config.bind_address).await?;
-        socket
-            .connect(server_address.to_server_addrs(SNTP_PORT))
-            .await?;
+        if self.config.connect_ip {
+            socket
+                .connect(server_address.to_server_addrs(SNTP_PORT))
+                .await?;
+        }
+
         let request = Request::new();
 
-        socket.send(&request.as_bytes()).await?;
+        socket.send_to(&request.as_bytes(), server_address.to_server_addrs(SNTP_PORT)).await?;
 
         let result_future = timeout(self.config.timeout, socket.recv_from(&mut receive_buffer));
 
