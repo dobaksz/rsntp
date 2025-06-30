@@ -176,9 +176,9 @@ impl Display for ReferenceIdentifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ReferenceIdentifier::Empty => Ok(()),
-            ReferenceIdentifier::ASCII(s) => write!(f, "{}", s),
-            ReferenceIdentifier::IpAddress(addr) => write!(f, "{}", addr),
-            ReferenceIdentifier::MD5Hash(hash) => write!(f, "{:#X}", hash),
+            ReferenceIdentifier::ASCII(s) => write!(f, "{s}"),
+            ReferenceIdentifier::IpAddress(addr) => write!(f, "{addr}"),
+            ReferenceIdentifier::MD5Hash(hash) => write!(f, "{hash:#X}"),
         }
     }
 }

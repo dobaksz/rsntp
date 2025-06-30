@@ -154,7 +154,7 @@ impl Display for ProtocolError {
                 write!(f, "Server reply contains invalid reference identifier")
             }
             ProtocolError::KissODeath(code) => {
-                write!(f, "Kiss-o'-Death packet received: {}", code)
+                write!(f, "Kiss-o'-Death packet received: {code}")
             }
         }
     }
@@ -184,10 +184,10 @@ impl Display for SynchronizationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SynchronizationError::IOError(io_error) => {
-                write!(f, "Input/output error: {}", io_error)
+                write!(f, "Input/output error: {io_error}")
             }
             SynchronizationError::ProtocolError(protocol_error) => {
-                write!(f, "Protocol error: {}", protocol_error)
+                write!(f, "Protocol error: {protocol_error}")
             }
         }
     }
@@ -207,7 +207,7 @@ impl From<ProtocolError> for SynchronizationError {
 
 impl SynchronizationError {
     /// Check if the error is a Kiss-o'-Death.
-
+    ///
     /// KoD is a special error case as it indicates that client should stop sending request
     /// to the server. This helper function checks directly for that error condition.
     ///
