@@ -7,19 +7,16 @@ fn chrono_example() {
     let time_info = client.synchronize("pool.ntp.org").unwrap();
 
     let clock_offset: Duration = time_info.clock_offset().try_into().unwrap();
-    println!("Clock offset: {} ms", clock_offset);
+    println!("Clock offset: {clock_offset} ms");
 
     let round_trip_delay: Duration = time_info.clock_offset().try_into().unwrap();
-    println!("Round trip delay: {} ms", round_trip_delay);
+    println!("Round trip delay: {round_trip_delay} ms");
 
     let datetime_utc: DateTime<Utc> = time_info.datetime().try_into().unwrap();
     let local_time: DateTime<Local> = DateTime::from(datetime_utc);
-    println!("Local time: {}", local_time);
+    println!("Local time: {local_time}");
 
-    println!(
-        "Reference identifier: {}",
-        time_info.reference_identifier().to_string()
-    );
+    println!("Reference identifier: {}", time_info.reference_identifier());
     println!("Stratum: {}", time_info.stratum());
 }
 

@@ -332,7 +332,10 @@ impl SntpClient {
         let request = Request::new();
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
-        socket.send_to(&request.as_bytes(), server_address.to_server_addrs(SNTP_PORT))?;
+        socket.send_to(
+            &request.as_bytes(),
+            server_address.to_server_addrs(SNTP_PORT),
+        )?;
         let (bytes_received, server_address) = socket.recv_from(&mut receive_buffer)?;
 
         let reply = Reply::new(
@@ -479,7 +482,12 @@ impl AsyncSntpClient {
 
         let request = Request::new();
 
-        socket.send_to(&request.as_bytes(), server_address.to_server_addrs(SNTP_PORT)).await?;
+        socket
+            .send_to(
+                &request.as_bytes(),
+                server_address.to_server_addrs(SNTP_PORT),
+            )
+            .await?;
 
         let result_future = timeout(self.config.timeout, socket.recv_from(&mut receive_buffer));
 
