@@ -323,19 +323,21 @@ impl SntpClient {
         server_address: A,
     ) -> Result<SynchronizationResult, SynchronizationError> {
         let socket = std::net::UdpSocket::bind(self.config.bind_address)?;
+        let remote_address = server_address.to_server_addrs(SNTP_PORT);
 
         socket.set_read_timeout(Some(self.config.timeout))?;
         if self.config.connect_ip {
-            socket.connect(server_address.to_server_addrs(SNTP_PORT))?;
+            socket.connect(&remote_address)?;
         }
 
         let request = Request::new();
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
-        socket.send_to(
-            &request.as_bytes(),
-            server_address.to_server_addrs(SNTP_PORT),
-        )?;
+        if self.config.connect_ip {
+            socket.send(&request.as_bytes())?;
+        } else {
+            socket.send_to(&request.as_bytes(), &remote_address)?;
+        }
         let (bytes_received, server_address) = socket.recv_from(&mut receive_buffer)?;
 
         let reply = Reply::new(
@@ -472,22 +474,25 @@ impl AsyncSntpClient {
         server_address: A,
     ) -> Result<SynchronizationResult, SynchronizationError> {
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
+        let remote_address = server_address.to_server_addrs(SNTP_PORT);
 
         let socket = tokio::net::UdpSocket::bind(self.config.bind_address).await?;
         if self.config.connect_ip {
-            socket
-                .connect(server_address.to_server_addrs(SNTP_PORT))
-                .await?;
+            socket.connect(&remote_address).await?;
         }
 
         let request = Request::new();
 
-        socket
-            .send_to(
-                &request.as_bytes(),
-                server_address.to_server_addrs(SNTP_PORT),
-            )
-            .await?;
+        if self.config.connect_ip {
+            socket.send(&request.as_bytes()).await?;
+        } else {
+            socket
+                .send_to(
+                    &request.as_bytes(),
+                    &remote_address
+                )
+                .await?;
+        }
 
         let result_future = timeout(self.config.timeout, socket.recv_from(&mut receive_buffer));
 
