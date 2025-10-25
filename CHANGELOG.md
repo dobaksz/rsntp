@@ -1,5 +1,9 @@
 # Changlelog
 
+## 4.1.0
+- Possible to use "non-connected" UDP sockets to receive multicast replies
+- Fix parsing issue with IPv6 address strings in ToServerAddrs
+
 ## 4.0.0
 - Correct typo in SynchronizationError (might break compilation)
 - Helper function to check for Kiss-o'-death
