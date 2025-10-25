@@ -117,10 +117,17 @@ impl ToServerAddrs for str {
     type Return = String;
 
     fn to_server_addrs(&self, default_port: u16) -> Self::Return {
-        if self.contains(':') {
-            self.to_string()
-        } else {
+        if self.parse::<Ipv4Addr>().is_ok() {
             self.to_string() + ":" + &default_port.to_string()
+        } else if self.parse::<Ipv6Addr>().is_ok() {
+            "[".to_string() + self + "]:" + &default_port.to_string()
+        } else if self.starts_with("[") && self.ends_with("]")  {
+            // probably an IPv6 address between [ and ]
+            self.to_string() + ":" + &default_port.to_string()
+        } else if !self.contains(":") {
+            self.to_string() + ":" + &default_port.to_string()
+        } else {
+            self.to_string()
         }
     }
 }
@@ -188,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn works_for_strings() {
+    fn works_for_ipv4_strings() {
         assert_eq!("127.0.0.1".to_server_addrs(456), "127.0.0.1:456");
         assert_eq!("127.0.0.1:1234".to_server_addrs(456), "127.0.0.1:1234");
         assert_eq!(
@@ -209,5 +216,16 @@ mod tests {
             ("127.0.0.1".to_string(), 1234).to_server_addrs(456),
             "127.0.0.1:1234"
         );
+    }
+
+    #[test]
+    fn works_for_ip6_string() {
+        assert_eq!("::1".to_server_addrs(456), "[::1]:456");
+        assert_eq!("[::1]".to_server_addrs(456), "[::1]:456");
+        assert_eq!("[::1]:1234".to_server_addrs(456), "[::1]:1234");
+
+        assert_eq!("::1".to_string().to_server_addrs(456), "[::1]:456");
+        assert_eq!("[::1]".to_string().to_server_addrs(456), "[::1]:456");
+        assert_eq!("[::1]:1234".to_string().to_server_addrs(456), "[::1]:1234");
     }
 }
