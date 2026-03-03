@@ -205,8 +205,9 @@ impl Packet {
 
         let version = (data[0] >> 3) & 0x07;
 
-        if version != 4 {
-            return Err(ProtocolError::InvalidPacketVersion);
+        match version {
+            3 | 4 => {} // OK
+            _ => return Err(ProtocolError::InvalidPacketVersion),
         }
 
         let li = LeapIndicator::from_u8(data[0] >> 6)?;
