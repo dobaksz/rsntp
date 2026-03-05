@@ -486,12 +486,7 @@ impl AsyncSntpClient {
         if self.config.connect_ip {
             socket.send(&request.as_bytes()).await?;
         } else {
-            socket
-                .send_to(
-                    &request.as_bytes(),
-                    &remote_address
-                )
-                .await?;
+            socket.send_to(&request.as_bytes(), &remote_address).await?;
         }
 
         let result_future = timeout(self.config.timeout, socket.recv_from(&mut receive_buffer));

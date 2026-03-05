@@ -121,7 +121,7 @@ impl ToServerAddrs for str {
             self.to_string() + ":" + &default_port.to_string()
         } else if self.parse::<Ipv6Addr>().is_ok() {
             "[".to_string() + self + "]:" + &default_port.to_string()
-        } else if self.starts_with("[") && self.ends_with("]")  {
+        } else if self.starts_with("[") && self.ends_with("]") {
             // probably an IPv6 address between [ and ]
             self.to_string() + ":" + &default_port.to_string()
         } else if !self.contains(":") {
