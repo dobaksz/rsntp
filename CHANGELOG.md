@@ -1,5 +1,8 @@
 # Changlelog
 
+## 4.1.1
+- Allow responses from NTPv3 servers
+
 ## 4.1.0
 - Possible to use "non-connected" UDP sockets to receive multicast replies
 - Fix parsing issue with IPv6 address strings in ToServerAddrs
