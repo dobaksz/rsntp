@@ -152,7 +152,7 @@ impl ToServerAddrs for (String, u16) {
     type Return = String;
 
     fn to_server_addrs(&self, _default_port: u16) -> Self::Return {
-        self.0.clone() + ":" + &self.1.to_string()
+        self.0.as_str().to_server_addrs(self.1)
     }
 }
 
@@ -227,5 +227,7 @@ mod tests {
         assert_eq!("::1".to_string().to_server_addrs(456), "[::1]:456");
         assert_eq!("[::1]".to_string().to_server_addrs(456), "[::1]:456");
         assert_eq!("[::1]:1234".to_string().to_server_addrs(456), "[::1]:1234");
+
+        assert_eq!(("::1".to_string(), 1234).to_server_addrs(456), "[::1]:1234");
     }
 }
