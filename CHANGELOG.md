@@ -1,5 +1,10 @@
 # Changlelog
 
+## 4.1.2
+- Fixed leap indicator values, LastMinuteHas59Seconds and LastMinuteHas61Seconds were swapped
+- Fixed formatting of IPv6 addresses
+- Reject server replies with stratum greater than 16 and/or leap alarm
+
 ## 4.1.1
 - Allow responses from NTPv3 servers
 
