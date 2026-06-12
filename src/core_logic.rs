@@ -70,6 +70,10 @@ impl Reply {
             return Err(ProtocolError::InvalidTransmitTimestamp);
         }
 
+        if self.reply.li == LeapIndicator::AlarmCondition || self.reply.stratum >= 16 {
+            return Err(ProtocolError::ServerNotSynchronized);
+        }
+
         if self.reply.mode != Mode::Server && self.reply.mode != Mode::Broadcast {
             return Err(ProtocolError::InvalidMode);
         }
@@ -202,6 +206,66 @@ mod tests {
         let result = reply.process();
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn sync_fails_if_server_reports_alarm_condition() {
+        let request = Request::new();
+        let now = SystemTime::now();
+
+        let reply_packet = Packet {
+            li: LeapIndicator::AlarmCondition,
+            mode: Mode::Server,
+            stratum: 1,
+            reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
+            reference_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_secs(86400),
+            ),
+            originate_timestamp: request.packet.transmit_timestamp,
+            receive_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
+            transmit_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
+        };
+
+        let err = Reply::new(request, reply_packet).process().unwrap_err();
+
+        assert!(matches!(
+            err,
+            SynchronizationError::ProtocolError(ProtocolError::ServerNotSynchronized)
+        ));
+    }
+
+    #[test]
+    fn sync_fails_if_server_reports_unsynchronized_stratum() {
+        let request = Request::new();
+        let now = SystemTime::now();
+
+        let reply_packet = Packet {
+            li: LeapIndicator::NoWarning,
+            mode: Mode::Server,
+            stratum: 16,
+            reference_identifier: ReferenceIdentifier::new_ascii([0x4c, 0x4f, 0x43, 0x4c]).unwrap(),
+            reference_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_secs(86400),
+            ),
+            originate_timestamp: request.packet.transmit_timestamp,
+            receive_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
+            transmit_timestamp: SntpTimestamp::from_systemtime(
+                now - std::time::Duration::from_millis(500),
+            ),
+        };
+
+        let err = Reply::new(request, reply_packet).process().unwrap_err();
+
+        assert!(matches!(
+            err,
+            SynchronizationError::ProtocolError(ProtocolError::ServerNotSynchronized)
+        ));
     }
 
     #[test]

@@ -120,6 +120,8 @@ pub enum ProtocolError {
     InvalidOriginateTimestamp,
     /// Server reply contains invalid transmit timestamp
     InvalidTransmitTimestamp,
+    /// Server reply indicates that the server clock is not synchronized
+    ServerNotSynchronized,
     /// Server reply contains invalid reference identifier
     InvalidReferenceIdentifier,
     /// Kiss-o'-Death packet received. KoD indicates that the server rejected the request and generally
@@ -149,6 +151,12 @@ impl Display for ProtocolError {
             }
             ProtocolError::InvalidTransmitTimestamp => {
                 write!(f, "Server reply contains invalid transmit timestamp")
+            }
+            ProtocolError::ServerNotSynchronized => {
+                write!(
+                    f,
+                    "Server reply indicates that the server clock is not synchronized"
+                )
             }
             ProtocolError::InvalidReferenceIdentifier => {
                 write!(f, "Server reply contains invalid reference identifier")
