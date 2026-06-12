@@ -85,8 +85,8 @@ impl LeapIndicator {
     fn from_u8(raw: u8) -> Result<LeapIndicator, ProtocolError> {
         match raw {
             0 => Ok(LeapIndicator::NoWarning),
-            1 => Ok(LeapIndicator::LastMinuteHas59Seconds),
-            2 => Ok(LeapIndicator::LastMinuteHas61Seconds),
+            1 => Ok(LeapIndicator::LastMinuteHas61Seconds),
+            2 => Ok(LeapIndicator::LastMinuteHas59Seconds),
             3 => Ok(LeapIndicator::AlarmCondition),
             _ => Err(ProtocolError::InvalidLeapIndicator),
         }
@@ -95,8 +95,8 @@ impl LeapIndicator {
     fn to_u8(self) -> u8 {
         match self {
             LeapIndicator::NoWarning => 0,
-            LeapIndicator::LastMinuteHas59Seconds => 1,
-            LeapIndicator::LastMinuteHas61Seconds => 2,
+            LeapIndicator::LastMinuteHas61Seconds => 1,
+            LeapIndicator::LastMinuteHas59Seconds => 2,
             LeapIndicator::AlarmCondition => 3,
         }
     }
