@@ -9,7 +9,7 @@ fn chrono_example() {
     let clock_offset: Duration = time_info.clock_offset().try_into().unwrap();
     println!("Clock offset: {clock_offset} ms");
 
-    let round_trip_delay: Duration = time_info.clock_offset().try_into().unwrap();
+    let round_trip_delay: Duration = time_info.round_trip_delay().try_into().unwrap();
     println!("Round trip delay: {round_trip_delay} ms");
 
     let datetime_utc: DateTime<Utc> = time_info.datetime().try_into().unwrap();
