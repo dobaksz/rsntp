@@ -8,6 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Rust toolchain used by every job. Change it here to switch versions.
+  RUST_VERSION: "1.100.0"
 
 jobs:
   build:
@@ -16,6 +18,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v5
+    - name: Install Rust ${{ env.RUST_VERSION }}
+      run: |
+        rustup toolchain install "$RUST_VERSION" --profile minimal --component clippy,rustfmt
+        rustup default "$RUST_VERSION"
     - name: Build
       run: cargo build --verbose
     - name: Format check
@@ -24,3 +30,32 @@ jobs:
       run: cargo clippy --all-targets --all-features -- -D warnings
     - name: Run tests
       run: cargo test --verbose
+
+  feature-matrix:
+    name: features (${{ matrix.extra-args || 'default' }})
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        extra-args:
+          - ""
+          - "--no-default-features"
+          - "--no-default-features --features async"
+          - "--no-default-features --features chrono"
+          - "--no-default-features --features time"
+          - "--no-default-features --features async,time"
+          - "--no-default-features --features chrono,time"
+          - "--no-default-features --features async,chrono,time"
+
+    steps:
+    - uses: actions/checkout@v5
+    - name: Install Rust ${{ env.RUST_VERSION }}
+      run: |
+        rustup toolchain install "$RUST_VERSION" --profile minimal --component clippy
+        rustup default "$RUST_VERSION"
+    - name: Run tests
+      run: cargo test ${{ matrix.extra-args }}
+    - name: Run clippy
+      run: cargo clippy ${{ matrix.extra-args }}
