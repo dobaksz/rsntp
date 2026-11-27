@@ -55,7 +55,7 @@ Support for the `chrono` crate was removed, because it is unmaintained. The `chr
 corresponding `TryInto` implementations are gone. If you still need `chrono` types, convert
 through `std::time::SystemTime`, which `chrono` supports out of the box:
 
-```text
+```ignore
 let datetime: chrono::DateTime<chrono::Utc> = result.datetime().into_system_time()?.into();
 let clock_offset = chrono::Duration::milliseconds((result.clock_offset().as_secs_f64() * 1000.0) as i64);
 ```
