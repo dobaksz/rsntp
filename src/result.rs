@@ -1,3 +1,4 @@
+use crate::clock::Clock;
 use crate::error::ConversionError;
 use crate::packet::{LeapIndicator, ReferenceIdentifier};
 #[cfg(all(feature = "chrono", feature = "time"))]
@@ -128,16 +129,42 @@ impl TryInto<time::Duration> for SntpDuration {
 /// always return with UTC timestamps. If you need timezone support then you have to use
 /// `chrono` or `time` crate for conversion.
 ///
+/// The conversions return with the current synchronized time at the moment of the conversion, i.e.
+/// converting the same instance later returns with a later time. The elapsed time since the
+/// synchronization is measured with the steady clock, so system clock changes do not affect it.
+///
 /// If `chrono` crate support is enabled then it will have [`TryInto<chrono::DateTime<Utc>>`] implemented.
 /// If `time` crate support is enabled then it will have [`TryInto<time::OffsetDateTime>`] implemented.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct SntpDateTime {
+    clock: Clock,
     offset: SntpDuration,
 }
 
+// The clock is an internal detail, so it is left out of the debug output
+impl std::fmt::Debug for SntpDateTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SntpDateTime")
+            .field("offset", &self.offset)
+            .finish()
+    }
+}
+
 impl SntpDateTime {
-    pub(crate) fn new(offset: SntpDuration) -> SntpDateTime {
-        SntpDateTime { offset }
+    pub(crate) fn new(clock: Clock, offset: SntpDuration) -> SntpDateTime {
+        SntpDateTime { clock, offset }
+    }
+
+    fn corrected(&self) -> Result<SystemTime, ConversionError> {
+        let local_now = self.clock.now();
+        let offset_abs = self.offset.abs_as_std_duration()?;
+
+        if self.offset.signum() >= 0 {
+            local_now.checked_add(offset_abs)
+        } else {
+            local_now.checked_sub(offset_abs)
+        }
+        .ok_or(ConversionError::Overflow)
     }
 
     /// Returns with the duration since Unix epoch i.e. Unix timestamp
@@ -145,11 +172,6 @@ impl SntpDateTime {
     /// Then conversion can fail in cases like internal overflow or when
     /// the date is not representable with a Unix timestamp (like it is
     /// before Unix epoch).
-    ///
-    /// Note that the function uses the actual system time during execution
-    /// so assumes that it is monotonic. If the time has been changed
-    /// between the actual synchronization and the call of this function,
-    /// then it may return with undefined results.
     ///
     /// ```no_run
     /// use rsntp::SntpClient;
@@ -160,17 +182,7 @@ impl SntpDateTime {
     /// let unix_timetamp_utc = result.datetime().unix_timestamp().unwrap();
     /// ```
     pub fn unix_timestamp(&self) -> Result<std::time::Duration, ConversionError> {
-        let now = SystemTime::now();
-
-        let corrected = if self.offset.signum() >= 0 {
-            now.checked_add(self.offset.abs_as_std_duration()?)
-                .ok_or(ConversionError::Overflow)?
-        } else {
-            now.checked_sub(self.offset.abs_as_std_duration()?)
-                .ok_or(ConversionError::Overflow)?
-        };
-
-        corrected
+        self.corrected()?
             .duration_since(SystemTime::UNIX_EPOCH)
             .map_err(|_| ConversionError::Overflow)
     }
@@ -206,15 +218,7 @@ impl TryInto<std::time::SystemTime> for SntpDateTime {
     type Error = ConversionError;
 
     fn try_into(self) -> Result<std::time::SystemTime, ConversionError> {
-        if self.offset.signum() > 0 {
-            SystemTime::now()
-                .checked_add(self.offset.abs_as_std_duration()?)
-                .ok_or(ConversionError::Overflow)
-        } else {
-            SystemTime::now()
-                .checked_sub(self.offset.abs_as_std_duration()?)
-                .ok_or(ConversionError::Overflow)
-        }
+        self.corrected()
     }
 }
 
@@ -225,7 +229,7 @@ impl TryInto<chrono::DateTime<chrono::Utc>> for SntpDateTime {
     fn try_into(self) -> Result<chrono::DateTime<chrono::Utc>, ConversionError> {
         let chrono_offset: chrono::Duration = self.offset.try_into()?;
 
-        chrono::Utc::now()
+        chrono::DateTime::<chrono::Utc>::from(self.clock.now())
             .checked_add_signed(chrono_offset)
             .ok_or(ConversionError::Overflow)
     }
@@ -238,7 +242,7 @@ impl TryInto<time::OffsetDateTime> for SntpDateTime {
     fn try_into(self) -> Result<time::OffsetDateTime, ConversionError> {
         let time_offset: time::Duration = self.offset.try_into()?;
 
-        time::OffsetDateTime::now_utc()
+        time::OffsetDateTime::from(self.clock.now())
             .checked_add(time_offset)
             .ok_or(ConversionError::Overflow)
     }
@@ -249,13 +253,27 @@ impl TryInto<time::OffsetDateTime> for SntpDateTime {
 /// If you just simply need a fairly accurate SNTP time then check the `datetime()` method. Other methods
 /// provide more detailed information about the outcome of the synchronization and might need deeper
 /// knwoledge about  SNTP protocol internals.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SynchronizationResult {
     clock_offset_s: f64,
     round_trip_delay_s: f64,
     reference_identifier: ReferenceIdentifier,
     leap_indicator: LeapIndicator,
     stratum: u8,
+    clock: Clock,
+}
+
+// The clock is an internal detail, so it is left out of the debug output
+impl std::fmt::Debug for SynchronizationResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SynchronizationResult")
+            .field("clock_offset_s", &self.clock_offset_s)
+            .field("round_trip_delay_s", &self.round_trip_delay_s)
+            .field("reference_identifier", &self.reference_identifier)
+            .field("leap_indicator", &self.leap_indicator)
+            .field("stratum", &self.stratum)
+            .finish()
+    }
 }
 
 impl SynchronizationResult {
@@ -265,6 +283,7 @@ impl SynchronizationResult {
         reference_identifier: ReferenceIdentifier,
         leap_indicator: LeapIndicator,
         stratum: u8,
+        clock: Clock,
     ) -> SynchronizationResult {
         SynchronizationResult {
             clock_offset_s,
@@ -272,6 +291,7 @@ impl SynchronizationResult {
             reference_identifier,
             leap_indicator,
             stratum,
+            clock,
         }
     }
 
@@ -336,8 +356,11 @@ impl SynchronizationResult {
 
     /// Returns with the current UTC date and time, based on the synchronized SNTP timestamp.
     ///
-    /// This is the current UTC date and time, calculated by adding clock offset the UTC time. To be accurate,
-    /// use the returned value immediately.
+    /// This is the current UTC date and time, calculated by adding the clock offset to the local time.
+    /// The local time is the time of the synchronization plus the time elapsed since then, measured
+    /// with the steady clock, so changes to the system clock after synchronization do not affect it.
+    ///
+    /// The returned value calculates the current time when it is converted, see [`SntpDateTime`].
     ///
     /// # Example
     ///
@@ -351,7 +374,7 @@ impl SynchronizationResult {
     /// let unix_timetamp_utc = result.datetime().unix_timestamp().unwrap();
     /// ```
     pub fn datetime(&self) -> SntpDateTime {
-        SntpDateTime::new(self.clock_offset())
+        SntpDateTime::new(self.clock, self.clock_offset())
     }
 
     /// Returns with the leap indicator
@@ -408,6 +431,7 @@ impl SynchronizationResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn sntp_duration_as_secs_f64_works() {
@@ -479,42 +503,109 @@ mod tests {
     }
 
     #[test]
+    fn sntp_date_time_unix_timestamp_works() {
+        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let steady_time = Instant::now();
+        let clock = Clock::new(system_time, steady_time);
+        let positive = SntpDateTime::new(clock, SntpDuration::from_secs_f64(5.0));
+        let negative = SntpDateTime::new(clock, SntpDuration::from_secs_f64(-5.0));
+
+        let positive_timestamp = positive.unix_timestamp().unwrap();
+        let negative_timestamp = negative.unix_timestamp().unwrap();
+        let elapsed = steady_time.elapsed();
+
+        assert!(positive_timestamp >= Duration::from_secs(1_000_005));
+        assert!(positive_timestamp <= Duration::from_secs(1_000_005) + elapsed);
+        assert!(negative_timestamp >= Duration::from_secs(999_995));
+        assert!(negative_timestamp <= Duration::from_secs(999_995) + elapsed);
+    }
+
+    #[test]
+    fn sntp_date_time_unix_timestamp_fails_before_epoch() {
+        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let clock = Clock::new(system_time, Instant::now());
+        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(-2_000_000.0));
+
+        assert!(datetime.unix_timestamp().is_err());
+    }
+
+    #[test]
     fn sntp_date_time_converting_to_system_time_works() {
-        let now = std::time::SystemTime::now();
-        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(3600.0));
+        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let steady_time = Instant::now();
+        let clock = Clock::new(system_time, steady_time);
+        let positive = SntpDateTime::new(clock, SntpDuration::from_secs_f64(3600.0));
+        let negative = SntpDateTime::new(clock, SntpDuration::from_secs_f64(-3600.0));
 
-        let systemtime_1 = datetime.into_system_time().unwrap();
-        let systemtime_2 = now
-            .checked_add(std::time::Duration::from_secs_f64(3600.0))
-            .unwrap();
+        let positive_converted = positive.into_system_time().unwrap();
+        let negative_converted = negative.into_system_time().unwrap();
+        let elapsed = steady_time.elapsed();
 
-        assert_eq!(
-            systemtime_1
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis(),
-            systemtime_2
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis()
-        );
+        let positive_expected = system_time + Duration::from_secs(3600);
+        let negative_expected = system_time - Duration::from_secs(3600);
+        assert!(positive_converted >= positive_expected);
+        assert!(positive_converted <= positive_expected + elapsed);
+        assert!(negative_converted >= negative_expected);
+        assert!(negative_converted <= negative_expected + elapsed);
+    }
+
+    #[test]
+    fn sntp_date_time_converting_to_system_time_fails_for_nan() {
+        let clock = Clock::new(SystemTime::UNIX_EPOCH, Instant::now());
+        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(f64::NAN));
+
+        assert!(datetime.into_system_time().is_err());
+    }
+
+    #[test]
+    fn sntp_date_time_follows_steady_clock() {
+        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let steady_time = Instant::now().checked_sub(Duration::from_secs(10)).unwrap();
+        let clock = Clock::new(system_time, steady_time);
+        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(5.0));
+
+        let timestamp = datetime.unix_timestamp().unwrap();
+        let elapsed = steady_time.elapsed();
+
+        assert!(timestamp >= Duration::from_secs(1_000_015));
+        assert!(timestamp <= Duration::from_secs(1_000_005) + elapsed);
+    }
+
+    #[test]
+    fn sntp_date_time_advances_between_conversions() {
+        let clock = Clock::new(SystemTime::UNIX_EPOCH, Instant::now());
+        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(0.0));
+
+        let converted_1 = datetime.into_system_time().unwrap();
+        std::thread::sleep(Duration::from_millis(10));
+        let converted_2 = datetime.into_system_time().unwrap();
+
+        assert!(converted_2.duration_since(converted_1).unwrap() >= Duration::from_millis(10));
     }
 
     #[cfg(feature = "chrono")]
     #[test]
     fn sntp_date_time_converting_to_chrono_datetime_works() {
-        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(0.1));
-        let converted: chrono::DateTime<chrono::Utc> = datetime.try_into().unwrap();
-        let diff = converted - chrono::Utc::now();
+        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let steady_time = Instant::now();
+        let clock = Clock::new(system_time, steady_time);
+        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(0.1));
 
-        assert!(diff.num_milliseconds() > 90);
-        assert!(diff.num_milliseconds() < 110);
+        let converted: chrono::DateTime<chrono::Utc> = datetime.try_into().unwrap();
+        let elapsed = steady_time.elapsed();
+
+        let converted = SystemTime::from(converted);
+        let expected = system_time + Duration::from_millis(100);
+        assert!(converted >= expected);
+        assert!(converted <= expected + elapsed);
     }
 
     #[cfg(feature = "chrono")]
     #[test]
     fn sntp_date_time_converting_to_chrono_datetime_fails_for_nan() {
-        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(f64::NAN));
+        let clock = Clock::new(SystemTime::UNIX_EPOCH, Instant::now());
+        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(f64::NAN));
+
         let converted: Result<chrono::DateTime<chrono::Utc>, ConversionError> = datetime.try_into();
 
         assert!(converted.is_err());
@@ -523,11 +614,37 @@ mod tests {
     #[cfg(feature = "time")]
     #[test]
     fn sntp_date_time_converting_to_time_offset_datetime_works() {
-        let datetime = SntpDateTime::new(SntpDuration::from_secs_f64(0.1));
-        let converted: time::OffsetDateTime = datetime.try_into().unwrap();
-        let diff = converted - time::OffsetDateTime::now_utc();
+        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let steady_time = Instant::now();
+        let clock = Clock::new(system_time, steady_time);
+        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(-0.1));
 
-        assert!(diff.whole_milliseconds() > 90);
-        assert!(diff.whole_milliseconds() < 110);
+        let converted: time::OffsetDateTime = datetime.try_into().unwrap();
+        let elapsed = steady_time.elapsed();
+
+        let converted = SystemTime::from(converted);
+        let expected = system_time - Duration::from_millis(100);
+        assert!(converted >= expected);
+        assert!(converted <= expected + elapsed);
+    }
+
+    #[test]
+    fn synchronization_result_datetime_follows_steady_clock() {
+        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let steady_time = Instant::now().checked_sub(Duration::from_secs(10)).unwrap();
+        let result = SynchronizationResult::new(
+            5.0,
+            0.1,
+            ReferenceIdentifier::Empty,
+            LeapIndicator::NoWarning,
+            1,
+            Clock::new(system_time, steady_time),
+        );
+
+        let timestamp = result.datetime().unix_timestamp().unwrap();
+        let elapsed = steady_time.elapsed();
+
+        assert!(timestamp >= Duration::from_secs(1_000_015));
+        assert!(timestamp <= Duration::from_secs(1_000_005) + elapsed);
     }
 }

@@ -1,5 +1,8 @@
 # Changlelog
 
+## Unreleased
+- System time is read only once per synchronization, elapsed time is measured with the steady clock, so system clock changes no longer affect the result
+
 ## 4.1.2
 - Fixed leap indicator values, LastMinuteHas59Seconds and LastMinuteHas61Seconds were swapped
 - Fixed formatting of IPv6 addresses

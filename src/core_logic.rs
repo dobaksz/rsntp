@@ -1,3 +1,4 @@
+use crate::clock::Clock;
 use crate::error::{KissCode, ProtocolError, SynchronizationError};
 use crate::packet::{LeapIndicator, Mode, Packet, ReferenceIdentifier, SntpTimestamp};
 use crate::result::SynchronizationResult;
@@ -8,10 +9,6 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new() -> Request {
-        Self::new_with_transmit_time(SystemTime::now())
-    }
-
     pub fn new_with_transmit_time(transmit_time: SystemTime) -> Request {
         Request {
             packet: Packet {
@@ -40,18 +37,21 @@ pub struct Reply {
     request: Packet,
     reply: Packet,
     reply_timestamp: SntpTimestamp,
+    clock: Clock,
 }
 
 impl Reply {
-    pub fn new(request: Request, reply: Packet) -> Reply {
-        Self::new_with_reply_time(request, reply, SystemTime::now())
-    }
-
-    pub fn new_with_reply_time(request: Request, reply: Packet, reply_time: SystemTime) -> Reply {
+    pub fn new_with_reply_time(
+        request: Request,
+        reply: Packet,
+        reply_time: SystemTime,
+        clock: Clock,
+    ) -> Reply {
         Reply {
             request: request.into_packet(),
             reply,
             reply_timestamp: SntpTimestamp::from_systemtime(reply_time),
+            clock,
         }
     }
 
@@ -95,6 +95,7 @@ impl Reply {
             self.reply.reference_identifier.clone(),
             self.reply.li,
             self.reply.stratum,
+            self.clock,
         ))
     }
 }
@@ -140,6 +141,7 @@ mod tests {
             request,
             reply_packet,
             now + std::time::Duration::from_millis(200),
+            Clock::new(now, std::time::Instant::now()),
         );
 
         let result = reply.process().unwrap();
@@ -154,8 +156,8 @@ mod tests {
 
     #[test]
     fn sync_fails_if_reply_originate_ts_does_not_match_request_transmit_ts() {
-        let request = Request::new();
         let now = SystemTime::now();
+        let request = Request::new_with_transmit_time(now - std::time::Duration::from_secs(1));
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -174,7 +176,12 @@ mod tests {
             ),
         };
 
-        let reply = Reply::new(request, reply_packet);
+        let reply = Reply::new_with_reply_time(
+            request,
+            reply_packet,
+            now,
+            Clock::new(now, std::time::Instant::now()),
+        );
 
         let result = reply.process();
 
@@ -183,8 +190,8 @@ mod tests {
 
     #[test]
     fn sync_fails_if_reply_contains_zero_transmit_timestamp() {
-        let request = Request::new();
         let now = SystemTime::now();
+        let request = Request::new_with_transmit_time(now);
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -201,7 +208,12 @@ mod tests {
             transmit_timestamp: SntpTimestamp::zero(),
         };
 
-        let reply = Reply::new(request, reply_packet);
+        let reply = Reply::new_with_reply_time(
+            request,
+            reply_packet,
+            now,
+            Clock::new(now, std::time::Instant::now()),
+        );
 
         let result = reply.process();
 
@@ -210,8 +222,8 @@ mod tests {
 
     #[test]
     fn sync_fails_if_server_reports_alarm_condition() {
-        let request = Request::new();
         let now = SystemTime::now();
+        let request = Request::new_with_transmit_time(now);
 
         let reply_packet = Packet {
             li: LeapIndicator::AlarmCondition,
@@ -230,7 +242,14 @@ mod tests {
             ),
         };
 
-        let err = Reply::new(request, reply_packet).process().unwrap_err();
+        let err = Reply::new_with_reply_time(
+            request,
+            reply_packet,
+            now,
+            Clock::new(now, std::time::Instant::now()),
+        )
+        .process()
+        .unwrap_err();
 
         assert!(matches!(
             err,
@@ -240,8 +259,8 @@ mod tests {
 
     #[test]
     fn sync_fails_if_server_reports_unsynchronized_stratum() {
-        let request = Request::new();
         let now = SystemTime::now();
+        let request = Request::new_with_transmit_time(now);
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -260,7 +279,14 @@ mod tests {
             ),
         };
 
-        let err = Reply::new(request, reply_packet).process().unwrap_err();
+        let err = Reply::new_with_reply_time(
+            request,
+            reply_packet,
+            now,
+            Clock::new(now, std::time::Instant::now()),
+        )
+        .process()
+        .unwrap_err();
 
         assert!(matches!(
             err,
@@ -270,8 +296,8 @@ mod tests {
 
     #[test]
     fn sync_fails_if_reply_contains_wrong_mode() {
-        let request = Request::new();
         let now = SystemTime::now();
+        let request = Request::new_with_transmit_time(now);
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -290,7 +316,12 @@ mod tests {
             ),
         };
 
-        let reply = Reply::new(request, reply_packet);
+        let reply = Reply::new_with_reply_time(
+            request,
+            reply_packet,
+            now,
+            Clock::new(now, std::time::Instant::now()),
+        );
 
         let result = reply.process();
 
@@ -299,8 +330,8 @@ mod tests {
 
     #[test]
     fn sync_fails_if_kiss_o_death_received() {
-        let request = Request::new();
         let now = SystemTime::now();
+        let request = Request::new_with_transmit_time(now);
 
         let reply_packet = Packet {
             li: LeapIndicator::NoWarning,
@@ -319,7 +350,12 @@ mod tests {
             ),
         };
 
-        let reply = Reply::new(request, reply_packet);
+        let reply = Reply::new_with_reply_time(
+            request,
+            reply_packet,
+            now,
+            Clock::new(now, std::time::Instant::now()),
+        );
 
         let err = reply.process().unwrap_err();
 

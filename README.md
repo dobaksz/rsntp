@@ -106,13 +106,18 @@ the amount of dependencies significantly.
 rsntp = { version = "4.1.2", default-features = false, features = ["chrono"] }
 ```
 
-## System clock assumptions
+## System suspend
 
-`rsntp` assumes that system clock is monotonic and stable. This is especially important
-with the `SynchronizationResult::datetime()` method, as `SynchronizationResult` stores just
-an offset to the system clock. If the system clock is changed between synchronization
-and the call to this method, then offset will not be valid anymore and some undefined result
-will be returned.
+`SynchronizationResult::datetime()` calculates the current time by adding the time elapsed since
+synchronization to the synchronized time. The elapsed time is measured with the steady clock
+(`std::time::Instant`), so changes to the system clock do not affect it. However, on some
+platforms (e.g. Linux and macOS) the steady clock does not advance while the system is suspended.
+If the system was suspended after synchronization, `datetime()` falls behind by the duration of
+the suspension, so synchronize again after the system resumes.
+
+The same applies if the system is suspended during synchronization: if the server reply arrives
+before the suspension but is only read after resuming, the synchronization succeeds with a small
+round trip delay, but `datetime()` is already behind by the duration of the suspension.
 
 ## IPv6 support
 

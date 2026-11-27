@@ -114,13 +114,18 @@ the amount of dependencies significantly.
 rsntp = { version = "4.1.2", default-features = false, features = ["chrono"]  }
 ```
 
-## System clock assumptions
+## System suspend
 
-`rsntp` assumes that system clock is monotonic and stable. This is especially important
-with the `SynchronizationResult::datetime()` method, as `SynchronizationResult` stores just
-an offset to the system clock. If the system clock is changed between synchronization
-and the call to this method, then offset will not be valid anymore and some undefined result
-might be returned.
+`SynchronizationResult::datetime()` calculates the current time by adding the time elapsed since
+synchronization to the synchronized time. The elapsed time is measured with the steady clock
+(`std::time::Instant`), so changes to the system clock do not affect it. However, on some
+platforms (e.g. Linux and macOS) the steady clock does not advance while the system is suspended.
+If the system was suspended after synchronization, `datetime()` falls behind by the duration of
+the suspension, so synchronize again after the system resumes.
+
+The same applies if the system is suspended during synchronization: if the server reply arrives
+before the suspension but is only read after resuming, the synchronization succeeds with a small
+round trip delay, but `datetime()` is already behind by the duration of the suspension.
 
 ## IPv6 support
 
@@ -143,6 +148,7 @@ let unix_timestamp_utc = result.datetime().unix_timestamp();
 "##
 )]
 
+mod clock;
 mod core_logic;
 mod error;
 mod packet;
@@ -154,6 +160,7 @@ pub use packet::{LeapIndicator, ReferenceIdentifier};
 pub use result::{SntpDateTime, SntpDuration, SynchronizationResult};
 pub use to_server_addrs::ToServerAddrs;
 
+use clock::Clock;
 use core_logic::{Reply, Request};
 use packet::Packet;
 use std::default::Default;
@@ -330,7 +337,8 @@ impl SntpClient {
             socket.connect(&remote_address)?;
         }
 
-        let request = Request::new();
+        let clock = Clock::start();
+        let request = Request::new_with_transmit_time(clock.now());
         let mut receive_buffer = [0; Packet::ENCODED_LEN];
 
         if self.config.connect_ip {
@@ -339,10 +347,13 @@ impl SntpClient {
             socket.send_to(&request.as_bytes(), &remote_address)?;
         }
         let (bytes_received, server_address) = socket.recv_from(&mut receive_buffer)?;
+        let reply_time = clock.now();
 
-        let reply = Reply::new(
+        let reply = Reply::new_with_reply_time(
             request,
             Packet::from_bytes(&receive_buffer[..bytes_received], server_address)?,
+            reply_time,
+            clock,
         );
 
         reply.process()
@@ -481,7 +492,8 @@ impl AsyncSntpClient {
             socket.connect(&remote_address).await?;
         }
 
-        let request = Request::new();
+        let clock = Clock::start();
+        let request = Request::new_with_transmit_time(clock.now());
 
         if self.config.connect_ip {
             socket.send(&request.as_bytes()).await?;
@@ -497,10 +509,13 @@ impl AsyncSntpClient {
                 "Timeout while waiting for server reply",
             )
         })??;
+        let reply_time = clock.now();
 
-        let reply = Reply::new(
+        let reply = Reply::new_with_reply_time(
             request,
             Packet::from_bytes(&receive_buffer[..bytes_received], server_address)?,
+            reply_time,
+            clock,
         );
 
         reply.process()
