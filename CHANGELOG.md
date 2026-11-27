@@ -1,6 +1,7 @@
 # Changlelog
 
 ## Unreleased
+- **Breaking:** removed `chrono` support, as the crate is unmaintained: the `chrono` feature (previously enabled by default), `SntpDateTime::into_chrono_datetime()`, `SntpDuration::into_chrono_duration()` and the `chrono` `TryInto` implementations are gone. Use `into_system_time()` or the optional `time` feature instead
 - System time is read only once per synchronization, elapsed time is measured with the steady clock, so system clock changes no longer affect the result
 
 ## 4.1.2

@@ -8,8 +8,7 @@ library for Rust.
 
 `rsntp` provides an API to synchronize time with SNTPv4 time servers with the following features:
 * Provides both a synchronous (blocking) and an (optional) asynchronous, `tokio` based API
-* Optional support for time and date crates `chrono` and `time` (`chrono` is enabled by
-  default)
+* Optional support for the `time` crate
 * IPv6 support
 
 ## Usage
@@ -21,62 +20,56 @@ Add this to your `Cargo.toml`:
 rsntp = "4.1.2"
 ```
 
-Obtain the current local time with the blocking API:
+Obtain the current time with the blocking API:
 
 ```rust
 use rsntp::SntpClient;
-use chrono::{DateTime, Local};
+use std::time::SystemTime;
 
 let client = SntpClient::new();
 let result = client.synchronize("pool.ntp.org").unwrap();
 
-let local_time: DateTime<Local> =
-  DateTime::from(result.datetime().into_chrono_datetime().unwrap());
+let now: SystemTime = result.datetime().into_system_time().unwrap();
 
-println!("Current time is: {}", local_time);
+println!("Current time is: {:?}", now);
 ```
 
 You can also use the asynchronous API to do the same:
 
 ```rust
 use rsntp::AsyncSntpClient;
-use chrono::{DateTime, Local, Utc};
+use std::time::SystemTime;
 
-async fn local_time() -> DateTime<Local> {
+async fn current_time() -> SystemTime {
   let client = AsyncSntpClient::new();
   let result = client.synchronize("pool.ntp.org").await.unwrap();
-   
-   DateTime::from(result.datetime().into_chrono_datetime().unwrap())
+
+  result.datetime().into_system_time().unwrap()
 }
 ```
 
-## API changes in version 3.0
+## API changes in version 5.0
 
-Version 3.0 made core code independent of time and date crates and added support for the `time` crate.
-This led to some breaking API changes, `SynchronizationResult` methods will return with wrappers
-struct instead of `chrono` ones. Those wrapper structs has `TryInto` implementation and helper
-methods to convert them to `chrono` format.
+Support for the `chrono` crate was removed, because it is unmaintained. The `chrono` feature,
+`SntpDateTime::into_chrono_datetime()`, `SntpDuration::into_chrono_duration()` and the
+corresponding `TryInto` implementations are gone. If you still need `chrono` types, convert
+through `std::time::SystemTime`, which `chrono` supports out of the box:
 
-To convert old code, replace
-```rust
-let datetime = result.datetime();
-```
-with
-```rust
-let datetime = result.datetime().into_chrono_datetime().unwrap();
-```
-or with
-```rust
-let datetime: chrono::DateTime<Utc> = result.datetime().try_into().unwrap();
+```text
+let datetime: chrono::DateTime<chrono::Utc> = result.datetime().into_system_time()?.into();
+let clock_offset = chrono::Duration::milliseconds((result.clock_offset().as_secs_f64() * 1000.0) as i64);
 ```
 
-The same applies to `Duration`s returned by `SynchronizationResult`.
+## Support for the `time` crate
 
-## Support for time and date crates
+`SynchronizationResult` returns time and date data in crate-independent wrapper types
+(`SntpDateTime` and `SntpDuration`), which can be converted to `std::time` types. Conversion to
+the types of the `time` crate can be enabled with the `time` feature:
 
-`rsntp` supports returning time and date data in different formats. Currently the format of
-the two most popular time and date handling crates supported: `chrono` and `time`.
-By default, `chrono` is enabled, but you can add `time` support with a feature:
+```toml
+[dependencies]
+rsntp = { version = "4.1.2", features = ["time"] }
+```
 
 ```rust
 use rsntp::SntpClient;
@@ -92,18 +85,15 @@ let utc_time = result
 println!("UTC time is: {}", utc_time);
 ```
 
-Support for both crates can be enabled independently; you can even enable both
-at the same time.
-
 ## Disabling asynchronous API
 
-The asynchronous API is enabled by default, but you can disable it. Disabling it 
-has the advantage that it removes the dependency to `tokio`, which reduces 
+The asynchronous API is enabled by default, but you can disable it. Disabling it
+has the advantage that it removes the dependency to `tokio`, which reduces
 the amount of dependencies significantly.
 
 ```toml
 [dependencies]
-rsntp = { version = "4.1.2", default-features = false, features = ["chrono"] }
+rsntp = { version = "4.1.2", default-features = false }
 ```
 
 ## System suspend

@@ -1,20 +1,17 @@
 use crate::clock::Clock;
 use crate::error::ConversionError;
 use crate::packet::{LeapIndicator, ReferenceIdentifier};
-#[cfg(all(feature = "chrono", feature = "time"))]
-use std::convert::TryInto;
 use std::time::SystemTime;
 
 /// Represents a signed duration value.
 ///
 /// It's main purpose is to store signed duration values which the [`std::time::Duration`] is not
 /// capable of, while making it possible to return a time-crate independent duration values
-/// (i.e. it works without `chrono` support enabled).
+/// (i.e. it works without any time crate support enabled).
 ///
 /// It can be converted to a different duration representation, depending on the
 /// enabled time crate support or it has some methods to inspect its value directly.
 ///
-/// If `chrono` crate support is enabled then it will have [`TryInto<chrono::Duration>`] implemented.
 /// If `time` crate support is enabled then it will have [`TryInto<time::Duration>`] implemented.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct SntpDuration(f64);
@@ -80,15 +77,6 @@ impl SntpDuration {
         self.0
     }
 
-    /// Convert instance to [`chrono::Duration`]
-    ///
-    /// Convenience wrapper for [`TryInto<chrono::Duration>::try_into`] to avoid
-    /// type annotations.
-    #[cfg(feature = "chrono")]
-    pub fn into_chrono_duration(self) -> Result<chrono::Duration, ConversionError> {
-        self.try_into()
-    }
-
     /// Convert instance to [`time::Duration`]
     ///
     /// Convenience wrapper for [`TryInto<time::Duration>::try_into`] to avoid
@@ -96,18 +84,6 @@ impl SntpDuration {
     #[cfg(feature = "time")]
     pub fn into_time_duration(self) -> Result<time::Duration, ConversionError> {
         self.try_into()
-    }
-}
-
-#[cfg(feature = "chrono")]
-impl TryInto<chrono::Duration> for SntpDuration {
-    type Error = ConversionError;
-
-    fn try_into(self) -> Result<chrono::Duration, ConversionError> {
-        let abs = chrono::Duration::from_std(self.abs_as_std_duration()?)
-            .map_err(|_| ConversionError::Overflow)?;
-
-        Ok(abs * self.signum())
     }
 }
 
@@ -127,13 +103,12 @@ impl TryInto<time::Duration> for SntpDuration {
 ///
 /// It can be inspected directly, but there is no built-in timezone conversion, it will
 /// always return with UTC timestamps. If you need timezone support then you have to use
-/// `chrono` or `time` crate for conversion.
+/// the `time` crate for conversion.
 ///
 /// The conversions return with the current synchronized time at the moment of the conversion, i.e.
 /// converting the same instance later returns with a later time. The elapsed time since the
 /// synchronization is measured with the steady clock, so system clock changes do not affect it.
 ///
-/// If `chrono` crate support is enabled then it will have [`TryInto<chrono::DateTime<Utc>>`] implemented.
 /// If `time` crate support is enabled then it will have [`TryInto<time::OffsetDateTime>`] implemented.
 #[derive(Clone, Copy)]
 pub struct SntpDateTime {
@@ -195,15 +170,6 @@ impl SntpDateTime {
         self.try_into()
     }
 
-    /// Convert instance to [`chrono::DateTime<chrono::Utc>`].
-    ///
-    /// Convenience wrapper for [`TryInto<chrono::DateTime<chrono::Utc>>::try_into`]
-    /// to avoid type annotations.
-    #[cfg(feature = "chrono")]
-    pub fn into_chrono_datetime(self) -> Result<chrono::DateTime<chrono::Utc>, ConversionError> {
-        self.try_into()
-    }
-
     /// Convert instance to [`time::OffsetDateTime`].
     ///
     /// Convenience wrapper for [`TryInto<time::OffsetDateTime>::try_into`]
@@ -219,19 +185,6 @@ impl TryInto<std::time::SystemTime> for SntpDateTime {
 
     fn try_into(self) -> Result<std::time::SystemTime, ConversionError> {
         self.corrected()
-    }
-}
-
-#[cfg(feature = "chrono")]
-impl TryInto<chrono::DateTime<chrono::Utc>> for SntpDateTime {
-    type Error = ConversionError;
-
-    fn try_into(self) -> Result<chrono::DateTime<chrono::Utc>, ConversionError> {
-        let chrono_offset: chrono::Duration = self.offset.try_into()?;
-
-        chrono::DateTime::<chrono::Utc>::from(self.clock.now())
-            .checked_add_signed(chrono_offset)
-            .ok_or(ConversionError::Overflow)
     }
 }
 
@@ -467,28 +420,6 @@ mod tests {
         assert!(duration.abs_as_std_duration().is_err());
     }
 
-    #[cfg(feature = "chrono")]
-    #[test]
-    fn sntp_duration_converting_to_chrono_duration_works() {
-        let positive_duration = SntpDuration::from_secs_f64(3600.0);
-        let negative_duration = SntpDuration::from_secs_f64(-3600.0);
-
-        let positive_chrono: chrono::Duration = positive_duration.try_into().unwrap();
-        let negative_chrono: chrono::Duration = negative_duration.try_into().unwrap();
-
-        assert_eq!(positive_chrono, chrono::Duration::hours(1));
-        assert_eq!(negative_chrono, chrono::Duration::hours(-1));
-    }
-
-    #[cfg(feature = "chrono")]
-    #[test]
-    fn sntp_duration_converting_to_chrono_duration_fails() {
-        let nan_duration_result: Result<chrono::Duration, ConversionError> =
-            SntpDuration::from_secs_f64(f64::NAN).try_into();
-
-        assert!(nan_duration_result.is_err());
-    }
-
     #[cfg(feature = "time")]
     #[test]
     fn sntp_duration_converting_to_time_duration_works() {
@@ -581,34 +512,6 @@ mod tests {
         let converted_2 = datetime.into_system_time().unwrap();
 
         assert!(converted_2.duration_since(converted_1).unwrap() >= Duration::from_millis(10));
-    }
-
-    #[cfg(feature = "chrono")]
-    #[test]
-    fn sntp_date_time_converting_to_chrono_datetime_works() {
-        let system_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
-        let steady_time = Instant::now();
-        let clock = Clock::new(system_time, steady_time);
-        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(0.1));
-
-        let converted: chrono::DateTime<chrono::Utc> = datetime.try_into().unwrap();
-        let elapsed = steady_time.elapsed();
-
-        let converted = SystemTime::from(converted);
-        let expected = system_time + Duration::from_millis(100);
-        assert!(converted >= expected);
-        assert!(converted <= expected + elapsed);
-    }
-
-    #[cfg(feature = "chrono")]
-    #[test]
-    fn sntp_date_time_converting_to_chrono_datetime_fails_for_nan() {
-        let clock = Clock::new(SystemTime::UNIX_EPOCH, Instant::now());
-        let datetime = SntpDateTime::new(clock, SntpDuration::from_secs_f64(f64::NAN));
-
-        let converted: Result<chrono::DateTime<chrono::Utc>, ConversionError> = datetime.try_into();
-
-        assert!(converted.is_err());
     }
 
     #[cfg(feature = "time")]
